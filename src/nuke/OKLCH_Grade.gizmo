@@ -1,0 +1,67 @@
+Gizmo {
+ name OKLCH_Grade
+ tile_color 0x3e5f9fff
+ postage_stamp false
+ inputs 1
+ onCreate "python \"import nuke, oklch_grade_init; oklch_grade_init.initialize_node(nuke.thisNode())\""
+ knobChanged "python \"import nuke, oklch_grade_init; oklch_grade_init.handle_knob_changed(nuke.thisNode(), nuke.thisKnob())\""
+ addUserKnob {20 OKLCHGrade l "OKLCH Grade"}
+ addUserKnob {4 input_colorspace l "Input Colorspace" M {scene_linear}}
+ addUserKnob {4 output_colorspace l "Output Colorspace" M {scene_linear}}
+ addUserKnob {7 l_gain l "L Gain" R -8 8}
+ l_gain 1
+ addUserKnob {7 l_offset l "L Offset" R -2 2}
+ l_offset 0
+ addUserKnob {7 c_gain l "C Gain" R -8 8}
+ c_gain 1
+ addUserKnob {7 c_offset l "C Offset" R -2 2}
+ c_offset 0
+ addUserKnob {7 hue_shift_deg l "Hue Shift (deg)" R -360 360}
+ hue_shift_deg 0
+ addUserKnob {7 mix l "Mix" R 0 1}
+ mix 1
+ addUserKnob {6 clamp_output l "Clamp Output"}
+ clamp_output false
+ addUserKnob {6 bypass l "Bypass"}
+ bypass false
+ addUserKnob {26 status_text l "Status" T "Not initialized"}
+ addUserKnob {1 working_linear_srgb_space l "Working Linear sRGB"}
+ working_linear_srgb_space ""
+ addUserKnob {1 diagnostics l "Diagnostics"}
+ diagnostics ""
+}
+ Input {
+  inputs 0
+  name Input1
+  xpos -100
+  ypos -260
+ }
+ OCIOColorSpace {
+  inputs 1
+  name OCIOColorSpace_IN
+  in_colorspace scene_linear
+  out_colorspace scene_linear
+  xpos -100
+  ypos -210
+ }
+ BlinkScript {
+  inputs 1
+  name BlinkScript_OKLCHGrade
+  xpos -100
+  ypos -150
+ }
+ OCIOColorSpace {
+  inputs 1
+  name OCIOColorSpace_OUT
+  in_colorspace scene_linear
+  out_colorspace scene_linear
+  xpos -100
+  ypos -90
+ }
+ Output {
+  inputs 1
+  name Output1
+  xpos -100
+  ypos -30
+ }
+end_group
