@@ -142,37 +142,29 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
         _set_text(group_node, "status_text", "Error: oklch_grade_kernel.cpp not found.")
         return False
 
-    try:
-        with open(kernel_path, "r", encoding="utf-8") as fh:
-            source = fh.read()
-    except Exception as exc:
-        _set_text(group_node, "status_text", f"Error reading kernel: {exc}")
-        return False
-
-    # Clear file mode to ensure inline source is used
     ksf = _knob(blink, "kernelSourceFile")
-    if ksf is not None:
-        ksf.setValue("")
-
-    source_knob = _knob(blink, "kernelSource")
-    if source_knob is None:
-        _set_text(group_node, "status_text", "Error: kernelSource knob not found.")
+    if ksf is None:
+        _set_text(group_node, "status_text", "Error: kernelSourceFile knob not found.")
         return False
-
+    
     try:
-        source_knob.setValue(source)
+        ksf.setValue(kernel_path)
     except Exception as exc:
-        _set_text(group_node, "status_text", f"Error setting kernel source: {exc}")
+        _set_text(group_node, "status_text", f"Error setting kernel path: {exc}")
         return False
 
+    # Execute "Load" button (reload) to read from file
+    reload_knob = _knob(blink, "reload")
+    if reload_knob is not None:
+        try:
+            reload_knob.execute()
+        except Exception:
+            pass
+
+    # Execute "Compile" button to generate parameters
     compile_knob = _knob(blink, "recompile")
     if compile_knob is None:
-        available = sorted(blink.knobs().keys())
-        _set_text(
-            group_node, "status_text",
-            f"Error: 'recompile' knob not found on BlinkScript node. "
-            f"Available knobs: {available}",
-        )
+        _set_text(group_node, "status_text", "Error: 'recompile' knob not found.")
         return False
 
     try:
@@ -180,6 +172,7 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
     except Exception as exc:
         _set_text(group_node, "status_text", f"Kernel compile error: {exc}")
         return False
+
 
     # After recompile, verify the param knobs exist.
     # BlinkScript can fail silently (no Python exception) if the kernel has
