@@ -32,12 +32,9 @@ def _add_toolbar_entry() -> None:
 
     icon_name = "oklch_grade.png"
     command = "nuke.createNode('OKLCH_Grade')"
-    menu_path = "Color/OKLCH/OKLCH Grade"
 
-    # Add to Nodes toolbar (left-hand side)
-    nodes_toolbar = nuke.toolbar("Nodes")
-    if nodes_toolbar:
-        nodes_toolbar.addCommand(menu_path, command, icon=icon_name)
+    t = nuke.menu("Nodes")
+    t.addCommand("Color/OKLCH/OKLCH Grade", command, icon=icon_name)
 
     setattr(nuke, MENU_GUARD_ATTR, True)
 

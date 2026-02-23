@@ -57,15 +57,7 @@ kernel OKLCHGrade : ImageComputationKernel<ePixelWise>
 
   float wrap_hue_deg(float h)
   {
-    while (h < 0.0f) {
-      h += 360.0f;
-    }
-
-    while (h >= 360.0f) {
-      h -= 360.0f;
-    }
-
-    return h;
+    return h - 360.0f * floor(h / 360.0f);
   }
 
   float3 linear_srgb_to_xyz(float3 rgb)
