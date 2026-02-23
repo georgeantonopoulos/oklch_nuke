@@ -20,12 +20,12 @@ kernel OKLCHGrade : ImageComputationKernel<ePixelWise>
 
   void define()
   {
-    defineParam(l_gain, "L Gain", 1.0f);
-    defineParam(l_offset, "L Offset", 0.0f);
-    defineParam(c_gain, "C Gain", 1.0f);
-    defineParam(c_offset, "C Offset", 0.0f);
-    defineParam(hue_shift_deg, "Hue Shift (deg)", 0.0f);
-    defineParam(mix, "Mix", 1.0f);
+    defineParam(l_gain, "L Gain", 1.0);
+    defineParam(l_offset, "L Offset", 0.0);
+    defineParam(c_gain, "C Gain", 1.0);
+    defineParam(c_offset, "C Offset", 0.0);
+    defineParam(hue_shift_deg, "Hue Shift (deg)", 0.0);
+    defineParam(mix, "Mix", 1.0);
     defineParam(clamp_output, "Clamp Output", false);
     defineParam(bypass, "Bypass", false);
   }

@@ -165,17 +165,31 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
         return False
 
     compile_knob = _knob(blink, "recompile")
-    if compile_knob is not None:
-        try:
-            compile_knob.execute()
-        except Exception as exc:
-            _set_text(group_node, "status_text", f"Kernel compile error: {exc}")
-            return False
+    if compile_knob is None:
+        available = sorted(blink.knobs().keys())
+        _set_text(
+            group_node, "status_text",
+            f"Error: 'recompile' knob not found on BlinkScript node. "
+            f"Available knobs: {available}",
+        )
+        return False
+
+    try:
+        compile_knob.execute()
+    except Exception as exc:
+        _set_text(group_node, "status_text", f"Kernel compile error: {exc}")
+        return False
 
     # After recompile, verify the param knobs exist.
-    # If they don't, the compile might have failed or is not yet finished.
+    # BlinkScript can fail silently (no Python exception) if the kernel has
+    # errors — in that case the param knobs are simply never created.
     if _knob(blink, "l_gain") is None:
-        _set_text(group_node, "status_text", "Error: Kernel parameters not found after compile.")
+        available = sorted(blink.knobs().keys())
+        _set_text(
+            group_node, "status_text",
+            f"Error: Kernel parameters not found after compile. "
+            f"BlinkScript knobs present: {available}",
+        )
         return False
 
     # After recompile the param knobs exist but carry Nuke's default range
