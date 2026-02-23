@@ -31,11 +31,14 @@ def _add_toolbar_entry() -> None:
     if getattr(nuke, MENU_GUARD_ATTR, False):
         return
 
-    icon_name = "oklch_grade.png"
+    _this_dir = os.path.dirname(os.path.abspath(__file__))
+    icon_path = os.path.join(_this_dir, "gizmos", "icons", "oklch_grade.png")
+    icon = icon_path if os.path.isfile(icon_path) else "oklch_grade.png"
+
     command = "nuke.createNode('OKLCH_Grade')"
-    
+
     t = nuke.menu("Nodes")
-    t.addCommand("Color/OKLCH/OKLCH Grade", command, icon=icon_name)
+    t.addCommand("Color/OKLCH/OKLCH Grade", command, icon=icon)
 
 
     setattr(nuke, MENU_GUARD_ATTR, True)
