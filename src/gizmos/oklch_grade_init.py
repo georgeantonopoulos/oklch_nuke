@@ -26,6 +26,19 @@ _GRADE_LINK_DEFS = (
     ("bypass",        "Bypass",          "BlinkScript_OKLCHGrade.bypass"),
 )
 
+# Slider ranges for BlinkScript float params.
+# defineParam(name, label, default) has no min/max argument in the Blink API,
+# so Nuke assigns a default range (often -1..1 or 0..1) after compilation.
+# These must be applied via setRange() after recompile.execute().
+_PARAM_RANGES = {
+    "l_gain":        (-8.0,   8.0),
+    "l_offset":      (-2.0,   2.0),
+    "c_gain":        (-8.0,   8.0),
+    "c_offset":      (-2.0,   2.0),
+    "hue_shift_deg": (-360.0, 360.0),
+    "mix":           (0.0,    1.0),
+}
+
 _COLORSPACE_LINK_DEFS = (
     ("input_colorspace",  "Input Colorspace",  "OCIOColorSpace_IN.in_colorspace"),
     ("output_colorspace", "Output Colorspace", "OCIOColorSpace_OUT.out_colorspace"),
@@ -154,6 +167,17 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
             _set_text(group_node, "status_text", f"Kernel compile error: {exc}")
             return False
 
+    # After recompile the param knobs exist but carry Nuke's default range
+    # (often -1..1 or 0..1).  Set meaningful ranges so sliders are usable,
+    # especially hue_shift_deg which needs -360..360.
+    for knob_name, (lo, hi) in _PARAM_RANGES.items():
+        k = _knob(blink, knob_name)
+        if k is not None:
+            try:
+                k.setRange(lo, hi)
+            except Exception:
+                pass
+
     return True
 
 
@@ -170,12 +194,16 @@ def _add_link_knobs(group_node: nuke.Node) -> None:
     """
     all_defs = _COLORSPACE_LINK_DEFS + _GRADE_LINK_DEFS
 
+    # To ensure knobs are placed in the correct tab, we should clear the User tab
+    # or ensure they are placed correctly. But first let's fix the linking.
     for (name, label, target) in all_defs:
         if group_node.knob(name) is not None:
             continue
         try:
             lk = nuke.Link_Knob(name, label)
-            lk.setLink(target)
+            target_node_name, target_knob_name = target.split('.')
+            lk.makeLink(target_node_name, target_knob_name)
+            # using makeLink resolves it to the inside node properly.
             group_node.addKnob(lk)
         except Exception:
             pass

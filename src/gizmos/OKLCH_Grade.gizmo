@@ -5,7 +5,7 @@ Gizmo {
  inputs 1
  onCreate {import nuke, oklch_grade_init; oklch_grade_init.initialize_node(nuke.thisNode())}
  knobChanged {import nuke, oklch_grade_init; oklch_grade_init.handle_knob_changed(nuke.thisNode(), nuke.thisKnob())}
- addUserKnob {20 OKLCHGrade l "OKLCH Grade"}
+ addUserKnob {20 User l "OKLCH Grade"}
  addUserKnob {26 status_text l "Status" T "Not initialized"}
  addUserKnob {1 working_linear_srgb_space l "Working Linear sRGB"}
  working_linear_srgb_space ""
