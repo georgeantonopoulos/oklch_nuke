@@ -49,10 +49,20 @@ If none is present, the tool enters fail-safe mode (warning + bypass).
 
 ## Installation
 
-1. Add `src/nuke` to your Nuke plugin path.
-2. Ensure `oklch_grade_init.py` is importable in Nuke's Python path.
-3. Place/create `OKLCH_Grade.gizmo` in a scanned gizmo location.
-4. Restart Nuke and create `OKLCH_Grade`.
+1. Add `/Users/georgeantonopoulos/Dev/oklch_nuke/src` to your `NUKE_PATH`.
+2. Restart Nuke.
+3. Nuke will execute:
+   - `/Users/georgeantonopoulos/Dev/oklch_nuke/src/init.py` (startup/python bootstrap)
+   - `/Users/georgeantonopoulos/Dev/oklch_nuke/src/menu.py` (UI menu/toolbar setup)
+4. `menu.py` registers `/Users/georgeantonopoulos/Dev/oklch_nuke/src/nuke` and adds:
+   - `Nodes > Color > OKLCH > OKLCH Grade`
+   - icon: `oklch_grade.png`
+5. Create `OKLCH_Grade` from that menu or tab search.
+
+Example `NUKE_PATH` setup:
+
+- macOS/Linux: `export NUKE_PATH=\"/Users/georgeantonopoulos/Dev/oklch_nuke/src:$NUKE_PATH\"`
+- Windows: `set NUKE_PATH=C:\\path\\to\\oklch_nuke\\src;%NUKE_PATH%`
 
 Optional override for kernel source path:
 
