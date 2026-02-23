@@ -148,6 +148,11 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
         _set_text(group_node, "status_text", f"Error reading kernel: {exc}")
         return False
 
+    # Clear file mode to ensure inline source is used
+    ksf = _knob(blink, "kernelSourceFile")
+    if ksf is not None:
+        ksf.setValue("")
+
     source_knob = _knob(blink, "kernelSource")
     if source_knob is None:
         _set_text(group_node, "status_text", "Error: kernelSource knob not found.")
@@ -166,6 +171,12 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
         except Exception as exc:
             _set_text(group_node, "status_text", f"Kernel compile error: {exc}")
             return False
+
+    # After recompile, verify the param knobs exist.
+    # If they don't, the compile might have failed or is not yet finished.
+    if _knob(blink, "l_gain") is None:
+        _set_text(group_node, "status_text", "Error: Kernel parameters not found after compile.")
+        return False
 
     # After recompile the param knobs exist but carry Nuke's default range
     # (often -1..1 or 0..1).  Set meaningful ranges so sliders are usable,
@@ -194,16 +205,16 @@ def _add_link_knobs(group_node: nuke.Node) -> None:
     """
     all_defs = _COLORSPACE_LINK_DEFS + _GRADE_LINK_DEFS
 
-    # To ensure knobs are placed in the correct tab, we should clear the User tab
-    # or ensure they are placed correctly. But first let's fix the linking.
+    # Ensure we are adding knobs to the correct tab. 
+    # Adding a Tab_Knob with the same name as an existing one should set the focus.
+    group_node.addKnob(nuke.Tab_Knob("OKLCHGrade", "OKLCH Grade"))
+    
     for (name, label, target) in all_defs:
         if group_node.knob(name) is not None:
             continue
         try:
             lk = nuke.Link_Knob(name, label)
-            target_node_name, target_knob_name = target.split('.')
-            lk.makeLink(target_node_name, target_knob_name)
-            # using makeLink resolves it to the inside node properly.
+            lk.setLink(target)
             group_node.addKnob(lk)
         except Exception:
             pass
@@ -265,9 +276,10 @@ def _setup_working_space(group_node: nuke.Node) -> None:
 def initialize_node(node: nuke.Node) -> None:
     """Called from gizmo onCreate: compile kernel, add Link_Knobs, wire OCIO."""
     _hide_tech_knobs(node)
-    _load_kernel_source(node)   # compile kernel — BlinkScript param knobs now exist
-    _add_link_knobs(node)       # add Link_Knobs pointing at all internal knobs
-    _setup_working_space(node)  # detect linear-sRGB, enable/disable internal nodes
+    # compile kernel — BlinkScript param knobs now exist
+    if _load_kernel_source(node):
+        _add_link_knobs(node)       # add Link_Knobs pointing at all internal knobs
+        _setup_working_space(node)  # detect linear-sRGB, enable/disable internal nodes
 
 
 def handle_knob_changed(node: nuke.Node, changed_knob) -> None:
