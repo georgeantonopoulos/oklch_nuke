@@ -277,11 +277,27 @@ def handle_knob_changed(node: nuke.Node, changed_knob) -> None:
     if changed_knob is None:
         return
 
+    # Guard: nuke.thisNode() can return an internal child node instead of the
+    # gizmo group when the user is inside the group ("BlinkScript mode").
+    # Bail out if the node doesn't own our sentinel knob.
+    if _knob(node, "working_linear_srgb_space") is None:
+        return
+
     knob_name = changed_knob.name()
     if knob_name not in SYNC_KNOBS:
         return
 
-    # Rebuild menu context if a colorspace menu changed.
+    if knob_name in GRADE_KNOBS:
+        # Grade value changed: push only that parameter to the BlinkScript node.
+        # Do NOT call _sync_internal_nodes here — it re-evaluates the disable
+        # state and will disable all internal nodes if working_linear_srgb_space
+        # is momentarily empty.
+        blink = node.node("BlinkScript_OKLCHGrade")
+        if blink is not None:
+            _copy_knob_value(node, blink, knob_name)
+        return
+
+    # Colorspace or working-space change: rebuild menus and do a full sync.
     if knob_name in {"input_colorspace", "output_colorspace"}:
         populate_knobs(node)
 
