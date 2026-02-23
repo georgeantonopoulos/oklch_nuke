@@ -12,11 +12,6 @@ param:
   bool clamp_output;
   bool bypass;
 
-local:
-  float pi;
-  float deg_per_rad;
-  float epsilon;
-
   void define() {
     defineParam(l_gain, "L Gain", 1.0f);
     defineParam(l_offset, "L Offset", 0.0f);
@@ -26,12 +21,6 @@ local:
     defineParam(mix, "Mix", 1.0f);
     defineParam(clamp_output, "Clamp Output", false);
     defineParam(bypass, "Bypass", false);
-  }
-
-  void init() {
-    pi = 3.14159265358979323846f;
-    deg_per_rad = 57.2957795130823208768f;
-    epsilon = 0.000004f;
   }
 
   float signed_cbrt(float x) {
@@ -127,13 +116,13 @@ local:
 
   float3 oklab_to_oklch(float3 lab) {
     float c = sqrt((lab.y * lab.y) + (lab.z * lab.z));
-    float h = atan2(lab.z, lab.y) * deg_per_rad;
+    float h = atan2(lab.z, lab.y) * 57.2957795131f;
 
     if (h < 0.0f) {
       h += 360.0f;
     }
 
-    if (c <= epsilon) {
+    if (c <= 0.000004f) {
       h = 0.0f;
     }
 
@@ -141,7 +130,7 @@ local:
   }
 
   float3 oklch_to_oklab(float3 lch) {
-    float rad = lch.z * (pi / 180.0f);
+    float rad = lch.z * (3.1415926536f / 180.0f);
     float a = lch.y * cos(rad);
     float b = lch.y * sin(rad);
     return float3(lch.x, a, b);
