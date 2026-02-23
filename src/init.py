@@ -2,10 +2,11 @@
 Nuke startup bootstrap (non-UI).
 
 Purpose:
-- ensure the bundled python helpers in `src/nuke` are importable in all
-  sessions (GUI and headless) so gizmo callbacks can import `oklch_grade_init`.
+- register the bundled `nuke` plugin directory so gizmos/scripts are available
+  in GUI and headless sessions.
+- ensure `oklch_grade_init.py` is importable by gizmo callbacks.
 
-UI concerns such as menu/toolbar registration are handled in `menu.py`.
+UI concerns (toolbar/menu commands) are handled in `menu.py`.
 """
 
 from __future__ import annotations
@@ -26,9 +27,11 @@ def _bootstrap_python_imports() -> None:
     root = os.path.dirname(os.path.abspath(__file__))
     nuke_dir = os.path.join(root, "nuke")
 
-    # Keep plugin-path wiring in menu.py; here we only ensure Python imports.
-    if os.path.isdir(nuke_dir) and nuke_dir not in sys.path:
-        sys.path.insert(0, nuke_dir)
+    if os.path.isdir(nuke_dir):
+        # Register gizmos and helper scripts for all session types.
+        nuke.pluginAddPath(nuke_dir)
+        if nuke_dir not in sys.path:
+            sys.path.insert(0, nuke_dir)
 
 
 _bootstrap_python_imports()

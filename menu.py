@@ -1,8 +1,8 @@
 """
-Nuke UI bootstrap.
+Repository-root Nuke UI bootstrap.
 
-Nuke executes `menu.py` for each directory in NUKE_PATH when running with UI.
-This file registers the gizmo directory and adds a toolbar/menu command.
+This supports installs where NUKE_PATH points to the repository root.
+It mirrors `src/menu.py` behavior and keeps registration duplicate-safe.
 """
 
 from __future__ import annotations
@@ -16,11 +16,10 @@ MENU_GUARD_ATTR = "_oklch_grade_menu_registered"
 
 def _register_plugin_paths() -> None:
     root = os.path.dirname(os.path.abspath(__file__))
-    nuke_dir = os.path.join(root, "nuke")
+    nuke_dir = os.path.join(root, "src", "nuke")
     icons_dir = os.path.join(nuke_dir, "icons")
 
     if os.path.isdir(nuke_dir):
-        # Ensure gizmo + helper python module discovery from bundled folder.
         nuke.pluginAddPath(nuke_dir)
 
     if os.path.isdir(icons_dir):
@@ -35,11 +34,14 @@ def _add_toolbar_entry() -> None:
     if nodes_toolbar is None:
         return
 
-    icon_name = "oklch_grade.png"
-    command = "nuke.createNode('OKLCH_Grade')"
-    nodes_toolbar.addCommand("Color/OKLCH/OKLCH Grade", command, icon=icon_name)
+    nodes_toolbar.addCommand(
+        "Color/OKLCH/OKLCH Grade",
+        "nuke.createNode('OKLCH_Grade')",
+        icon="oklch_grade.png",
+    )
     setattr(nuke, MENU_GUARD_ATTR, True)
 
 
 _register_plugin_paths()
 _add_toolbar_entry()
+

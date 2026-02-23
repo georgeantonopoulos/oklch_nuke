@@ -49,20 +49,39 @@ If none is present, the tool enters fail-safe mode (warning + bypass).
 
 ## Installation
 
-1. Add `/Users/georgeantonopoulos/Dev/oklch_nuke/src` to your `NUKE_PATH`.
+1. Add either of these to `NUKE_PATH`:
+   - `/Users/georgeantonopoulos/Dev/oklch_nuke` (recommended), or
+   - `/Users/georgeantonopoulos/Dev/oklch_nuke/src`
 2. Restart Nuke.
-3. Nuke will execute:
-   - `/Users/georgeantonopoulos/Dev/oklch_nuke/src/init.py` (startup/python bootstrap)
-   - `/Users/georgeantonopoulos/Dev/oklch_nuke/src/menu.py` (UI menu/toolbar setup)
-4. `menu.py` registers `/Users/georgeantonopoulos/Dev/oklch_nuke/src/nuke` and adds:
+3. Nuke startup hooks used by this repo:
+   - `init.py` for non-UI bootstrap (plugin paths + Python importability)
+   - `menu.py` for UI registration (toolbar/menu command)
+4. The UI hook adds:
    - `Nodes > Color > OKLCH > OKLCH Grade`
    - icon: `oklch_grade.png`
 5. Create `OKLCH_Grade` from that menu or tab search.
 
-Example `NUKE_PATH` setup:
+Example `NUKE_PATH` setup (repo-root form):
 
-- macOS/Linux: `export NUKE_PATH=\"/Users/georgeantonopoulos/Dev/oklch_nuke/src:$NUKE_PATH\"`
-- Windows: `set NUKE_PATH=C:\\path\\to\\oklch_nuke\\src;%NUKE_PATH%`
+- macOS/Linux: `export NUKE_PATH=\"/Users/georgeantonopoulos/Dev/oklch_nuke:$NUKE_PATH\"`
+- Windows: `set NUKE_PATH=C:\\path\\to\\oklch_nuke;%NUKE_PATH%`
+
+## Quick diagnostics in Nuke Script Editor
+
+```python
+import nuke
+print("plugin paths:", nuke.pluginPath())
+import oklch_grade_init
+print("oklch_grade_init import: OK")
+try:
+    node = nuke.createNode("OKLCH_Grade", inpanel=False)
+    print("OKLCH_Grade creation: OK")
+    nuke.delete(node)
+except Exception as exc:
+    print("OKLCH_Grade creation failed:", exc)
+```
+
+If node creation fails, your `NUKE_PATH` is not pointing at the expected location or startup scripts are not being executed.
 
 Optional override for kernel source path:
 
