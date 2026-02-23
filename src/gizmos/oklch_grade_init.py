@@ -36,24 +36,15 @@ def _knob(node: nuke.Node, name: str):
     return node.knob(name)
 
 
-def get_ocio_colorspaces() -> List[str]:
-    """Return available OCIO colorspaces from the active config."""
+def get_ocio_colorspaces(node: nuke.Node) -> List[str]:
+    """Return available OCIO colorspaces by quering internal OCIOColorSpace node."""
     try:
-        values = nuke.getOcioColorSpaces()
+        ocio_in = node.node("OCIOColorSpace_IN")
+        if ocio_in is not None:
+            return list(ocio_in.knob("in_colorspace").values())
     except Exception:
-        return []
-
-    if not values:
-        return []
-
-    # Preserve order while de-duping.
-    deduped = []
-    seen = set()
-    for value in values:
-        if value not in seen:
-            deduped.append(value)
-            seen.add(value)
-    return deduped
+        pass
+    return []
 
 
 def detect_linear_srgb_space(colorspaces: Iterable[str]) -> Optional[str]:
@@ -145,6 +136,12 @@ def _find_kernel_path() -> Optional[str]:
     if os.path.isfile(candidate):
         return candidate
 
+    import nuke
+    for path in nuke.pluginPath():
+        candidate_p = os.path.normpath(os.path.join(path, "..", "blink", "oklch_grade_kernel.cpp"))
+        if os.path.isfile(candidate_p):
+            return candidate_p
+
     return None
 
 
@@ -231,7 +228,7 @@ def _sync_internal_nodes(group_node: nuke.Node) -> None:
 
 def populate_knobs(node: nuke.Node) -> None:
     """Populate public colorspace menus and set working-space diagnostics."""
-    colorspaces = get_ocio_colorspaces()
+    colorspaces = get_ocio_colorspaces(node)
 
     in_knob = _knob(node, "input_colorspace")
     out_knob = _knob(node, "output_colorspace")
