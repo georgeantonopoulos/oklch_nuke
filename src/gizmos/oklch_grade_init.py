@@ -8,7 +8,7 @@ from typing import Iterable, List, Optional
 import nuke
 
 LINEAR_SRGB_ALIASES = (
-    "Utility - Linear - sRGB",
+    "Utility - Linear - sRGB",  # Prioritize ACES alias
     "lin_srgb",
     "Linear sRGB",
     "srgb_linear",
@@ -32,11 +32,11 @@ _GRADE_LINK_DEFS = (
 # so Nuke assigns a default range (often -1..1 or 0..1) after compilation.
 # These must be applied via setRange() after recompile.execute().
 _PARAM_RANGES = {
-    "OKLCHGrade_L Gain":        (-8.0,   8.0),
-    "OKLCHGrade_L Offset":      (-2.0,   2.0),
-    "OKLCHGrade_C Gain":        (-8.0,   8.0),
-    "OKLCHGrade_C Offset":      (-2.0,   2.0),
-    "OKLCHGrade_Hue Shift (deg)": (-360.0, 360.0),
+    "OKLCHGrade_L Gain":        (0.0,    3.0),
+    "OKLCHGrade_L Offset":      (-1.0,   1.0),
+    "OKLCHGrade_C Gain":        (0.0,    2.0),
+    "OKLCHGrade_C Offset":      (0.0,    0.5),
+    "OKLCHGrade_Hue Shift (deg)": (-180.0, 180.0),
     "OKLCHGrade_Mix":           (0.0,    1.0),
 }
 
@@ -70,14 +70,25 @@ def get_ocio_colorspaces() -> List[str]:
 def detect_linear_srgb_space(colorspaces: Iterable[str]) -> Optional[str]:
     """Pick the best linear-sRGB colorspace alias from the active OCIO config."""
     colorspaces = list(colorspaces)
+    
+    # 1. Exact alias match (prioritized list)
     for alias in LINEAR_SRGB_ALIASES:
         if alias in colorspaces:
             return alias
+            
+    # 2. Case-insensitive alias match
     lowered = {v.lower(): v for v in colorspaces}
     for alias in LINEAR_SRGB_ALIASES:
         hit = lowered.get(alias.lower())
         if hit:
             return hit
+            
+    # 3. Aggressive search for 'linear' AND 'srgb'
+    for v in colorspaces:
+        v_low = v.lower()
+        if "linear" in v_low and "srgb" in v_low:
+            return v
+            
     return None
 
 
@@ -219,30 +230,24 @@ def _setup_working_space(group_node: nuke.Node) -> None:
     colorspaces = get_ocio_colorspaces()
     linear_space = detect_linear_srgb_space(colorspaces)
 
-    wk = _knob(group_node, "working_linear_srgb_space")
-    if wk is not None:
-        try:
-            wk.setValue(linear_space or "")
-        except Exception:
-            pass
-
+    # Force internal bridge to linear-sRGB
     ocio_in  = group_node.node("OCIOColorSpace_IN")
     ocio_out = group_node.node("OCIOColorSpace_OUT")
-    blink    = group_node.node("BlinkScript_OKLCHGrade")
-    if ocio_in is not None:
-        if linear_space and _knob(ocio_in, "out_colorspace") is not None:
-            ocio_in["out_colorspace"].setValue(linear_space)
-
-    if ocio_out is not None:
-        if linear_space and _knob(ocio_out, "in_colorspace") is not None:
-            ocio_out["in_colorspace"].setValue(linear_space)
-
+    
     if linear_space:
+        if ocio_in:
+            ocio_in["out_colorspace"].setValue(linear_space)
+        if ocio_out:
+            ocio_out["in_colorspace"].setValue(linear_space)
+        
+        wk = _knob(group_node, "working_linear_srgb_space")
+        if wk:
+            wk.setValue(linear_space)
         _set_text(group_node, "status_text", f"Ready. Working space: {linear_space}")
     else:
         _set_text(
             group_node, "status_text",
-            "Note: no linear-sRGB alias found in OCIO config. Please check conversion settings.",
+            "Note: no linear-sRGB alias found. Using default (check OCIO nodes).",
         )
 
 
