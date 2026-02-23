@@ -11,6 +11,7 @@ param:
   float mix;
   bool clamp_output;
   bool bypass;
+  int debug_mode;
 
   void define() {
     defineParam(l_gain, "L Gain", 1.0f);
@@ -21,6 +22,7 @@ param:
     defineParam(mix, "Mix", 1.0f);
     defineParam(clamp_output, "Clamp Output", false);
     defineParam(bypass, "Bypass", false);
+    defineParam(debug_mode, "Debug Mode", 0);
   }
 
   float signed_cbrt(float x) {
@@ -170,6 +172,20 @@ param:
       graded_rgb.x = clamp01(graded_rgb.x);
       graded_rgb.y = clamp01(graded_rgb.y);
       graded_rgb.z = clamp01(graded_rgb.z);
+    }
+
+    if (debug_mode == 1) { // Lightness
+      dst() = float4(L, L, L, rgba.w);
+      return;
+    }
+    if (debug_mode == 2) { // Chroma
+      dst() = float4(C, C, C, rgba.w);
+      return;
+    }
+    if (debug_mode == 3) { // Hue (0-360 mapped to 0-1)
+      float h_vis = H / 360.0f;
+      dst() = float4(h_vis, h_vis, h_vis, rgba.w);
+      return;
     }
 
     float t = clamp(mix, 0.0f, 1.0f);

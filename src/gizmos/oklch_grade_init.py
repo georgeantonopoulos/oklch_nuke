@@ -24,6 +24,7 @@ _GRADE_LINK_DEFS = (
     ("mix",           "Mix",             "BlinkScript_OKLCHGrade.mix"),
     ("clamp_output",  "Clamp Output",    "BlinkScript_OKLCHGrade.clamp_output"),
     ("bypass",        "Bypass",          "BlinkScript_OKLCHGrade.bypass"),
+    ("debug_mode",    "Debug Mode",      "BlinkScript_OKLCHGrade.debug_mode"),
 )
 
 # Slider ranges for BlinkScript float params.
