@@ -26,26 +26,16 @@ param:
   }
 
   float signed_cbrt(float x) {
-    if (x == 0.0f) {
+    if (x == 0.0f)
       return 0.0f;
-    }
-
-    if (x > 0.0f) {
-      return pow(x, 1.0f / 3.0f);
-    }
-
-    return -pow(-x, 1.0f / 3.0f);
+    return (x > 0.0f) ? pow(x, 1.0f / 3.0f) : -pow(-x, 1.0f / 3.0f);
   }
 
   float clamp01(float x) { return clamp(x, 0.0f, 1.0f); }
 
   float wrap_hue_deg(float h) {
-    // Use fmod (not floor) — floor is not in the BlinkScript math surface.
-    float wrapped = fmod(h, 360.0f);
-    if (wrapped < 0.0f) {
-      wrapped += 360.0f;
-    }
-    return wrapped;
+    float wrapped = h - 360.0f * floor(h / 360.0f);
+    return (wrapped < 0.0f) ? wrapped + 360.0f : wrapped;
   }
 
   float3 linear_srgb_to_xyz(float3 rgb) {
@@ -139,34 +129,45 @@ param:
   }
 
   void process() {
-    float4 rgba = src();
-    float3 in_rgb =
-        float3(max(0.0f, rgba.x), max(0.0f, rgba.y), max(0.0f, rgba.z));
+    float4 src_pixel = src();
+    float3 in_rgb = float3(max(0.0f, src_pixel.x), max(0.0f, src_pixel.y),
+                           max(0.0f, src_pixel.z));
 
     if (bypass) {
-      dst() = rgba;
+      dst() = src_pixel;
       return;
     }
 
-    float3 xyz = linear_srgb_to_xyz(in_rgb);
-    float3 lab = xyz_to_oklab(xyz);
-    float3 lch = oklab_to_oklch(lab);
+    float3 current_xyz = linear_srgb_to_xyz(in_rgb);
+    float3 current_lab = xyz_to_oklab(current_xyz);
+    float3 current_lch = oklab_to_oklch(current_lab);
 
-    float L = (lch.x * l_gain) + l_offset;
-    float C = (lch.y * c_gain) + c_offset;
-    float H = wrap_hue_deg(lch.z + hue_shift_deg);
+    float graded_L = (current_lch.x * l_gain) + l_offset;
+    float graded_C = (current_lch.y * c_gain) + c_offset;
+    float graded_H = wrap_hue_deg(current_lch.z + hue_shift_deg);
 
-    if (L < 0.0f) {
-      L = 0.0f;
+    if (graded_L < 0.0f)
+      graded_L = 0.0f;
+    if (graded_C < 0.0f)
+      graded_C = 0.0f;
+
+    if (debug_mode == 1) { // Lightness
+      dst() = float4(graded_L, graded_L, graded_L, src_pixel.w);
+      return;
+    }
+    if (debug_mode == 2) { // Chroma
+      dst() = float4(graded_C, graded_C, graded_C, src_pixel.w);
+      return;
+    }
+    if (debug_mode == 3) { // Hue
+      float h_vis = graded_H / 360.0f;
+      dst() = float4(h_vis, h_vis, h_vis, src_pixel.w);
+      return;
     }
 
-    if (C < 0.0f) {
-      C = 0.0f;
-    }
-
-    float3 graded_lab = oklch_to_oklab(float3(L, C, H));
-    float3 graded_xyz = oklab_to_xyz(graded_lab);
-    float3 graded_rgb = xyz_to_linear_srgb(graded_xyz);
+    float3 out_lab = oklch_to_oklab(float3(graded_L, graded_C, graded_H));
+    float3 out_xyz = oklab_to_xyz(out_lab);
+    float3 graded_rgb = xyz_to_linear_srgb(out_xyz);
 
     if (clamp_output) {
       graded_rgb.x = clamp01(graded_rgb.x);
@@ -174,23 +175,9 @@ param:
       graded_rgb.z = clamp01(graded_rgb.z);
     }
 
-    if (debug_mode == 1) { // Lightness
-      dst() = float4(L, L, L, rgba.w);
-      return;
-    }
-    if (debug_mode == 2) { // Chroma
-      dst() = float4(C, C, C, rgba.w);
-      return;
-    }
-    if (debug_mode == 3) { // Hue (0-360 mapped to 0-1)
-      float h_vis = H / 360.0f;
-      dst() = float4(h_vis, h_vis, h_vis, rgba.w);
-      return;
-    }
-
     float t = clamp(mix, 0.0f, 1.0f);
-    float3 out_rgb = in_rgb + ((graded_rgb - in_rgb) * t);
+    float3 final_rgb = in_rgb + ((graded_rgb - in_rgb) * t);
 
-    dst() = float4(out_rgb.x, out_rgb.y, out_rgb.z, rgba.w);
+    dst() = float4(final_rgb.x, final_rgb.y, final_rgb.z, src_pixel.w);
   }
 };
