@@ -146,49 +146,50 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
     if ksf is None:
         _set_text(group_node, "status_text", "Error: kernelSourceFile knob not found.")
         return False
-    
+
     try:
         ksf.setValue(kernel_path)
     except Exception as exc:
         _set_text(group_node, "status_text", f"Error setting kernel path: {exc}")
         return False
 
-    # Execute "Load" button (reload) to read from file
-    reload_knob = _knob(blink, "reload")
+    # Trigger "Reload" to read from disk
+    reload_knob = _knob(blink, "reloadKernelSourceFile")
     if reload_knob is not None:
+            try:
+                k.execute()
+            except Exception:
+                pass
+
+    # Trigger "Compile" button
+    compile_knob = _knob(blink, "recompile")
+    if compile_knob is not None:
         try:
-            reload_knob.execute()
+            compile_knob.execute()
         except Exception:
             pass
 
-    # Execute "Compile" button to generate parameters
-    compile_knob = _knob(blink, "recompile")
-    if compile_knob is None:
-        _set_text(group_node, "status_text", "Error: 'recompile' knob not found.")
-        return False
+    # Verification loop. BlinkScript knob generation can be deferred.
+    # We check for 'l_gain' as it's the first parameter in our kernel.
+    # Note: In a blocking onCreate, this is the best we can do.
+    found = False
+    for _ in range(20):
+        if _knob(blink, "l_gain") is not None:
+            found = True
+            break
+        import time
+        time.sleep(0.05)
 
-    try:
-        compile_knob.execute()
-    except Exception as exc:
-        _set_text(group_node, "status_text", f"Kernel compile error: {exc}")
-        return False
-
-
-    # After recompile, verify the param knobs exist.
-    # BlinkScript can fail silently (no Python exception) if the kernel has
-    # errors — in that case the param knobs are simply never created.
-    if _knob(blink, "l_gain") is None:
+    if not found:
         available = sorted(blink.knobs().keys())
         _set_text(
             group_node, "status_text",
-            f"Error: Kernel parameters not found after compile. "
-            f"BlinkScript knobs present: {available}",
+            f"Error: Kernel parameters not found. Check kernel syntax. "
+            f"Knobs present: {available}"
         )
         return False
 
-    # After recompile the param knobs exist but carry Nuke's default range
-    # (often -1..1 or 0..1).  Set meaningful ranges so sliders are usable,
-    # especially hue_shift_deg which needs -360..360.
+    # Once knobs are generated, set meaningful UI ranges.
     for knob_name, (lo, hi) in _PARAM_RANGES.items():
         k = _knob(blink, knob_name)
         if k is not None:
@@ -198,6 +199,7 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
                 pass
 
     return True
+
 
 
 def _add_link_knobs(group_node: nuke.Node) -> None:
@@ -269,10 +271,16 @@ def _setup_working_space(group_node: nuke.Node) -> None:
 def initialize_node(node: nuke.Node) -> None:
     """Called from gizmo onCreate: compile kernel, add Link_Knobs, wire OCIO."""
     _hide_tech_knobs(node)
-    # compile kernel — BlinkScript param knobs now exist
-    if _load_kernel_source(node):
-        _add_link_knobs(node)       # add Link_Knobs pointing at all internal knobs
-        _setup_working_space(node)  # detect linear-sRGB, enable/disable internal nodes
+    
+    # 1. Load and compile kernel
+    if not _load_kernel_source(node):
+        return
+
+    # 2. Add Link_Knobs (now guaranteed that param knobs exist)
+    _add_link_knobs(node)
+    
+    # 3. Setup OCIO
+    _setup_working_space(node)
 
 
 def handle_knob_changed(node: nuke.Node, changed_knob) -> None:
