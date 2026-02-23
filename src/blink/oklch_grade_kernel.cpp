@@ -3,11 +3,44 @@ kernel OKLCHGrade : ImageComputationKernel<ePixelWise> {
   Image<eWrite> dst;
 
 param:
+  // --- Lightness ---
   float l_gain;
   float l_offset;
+
+  // --- Chroma ---
   float c_gain;
   float c_offset;
+
+  // --- Global Hue ---
+  // Shifts ALL hues by a constant offset in degrees.
+  // The effect fades to zero for near-achromatic pixels (Chroma <
+  // hue_chroma_threshold), preventing muddy grey casts when rotating hue
+  // globally.
   float hue_shift_deg;
+  float hue_chroma_threshold; // Chroma below which the global+band shifts fade
+                              // out (0..0.2)
+
+  // --- Hue Band Selectors ---
+  // Each shifts only the pixels whose original hue falls within that colour
+  // band. Influence falls off smoothly away from each band centre using a
+  // cosine window (half-angle = 60 deg), so adjacent bands overlap and blend
+  // naturally like a colour wheel divided into six 60-degree sectors.
+  //
+  //  Band centres (OKLCH hue wheel, perceptually placed):
+  //    Red     ~  0 / 360 deg
+  //    Yellow  ~ 85 deg
+  //    Green   ~ 145 deg
+  //    Cyan    ~ 195 deg
+  //    Blue    ~ 265 deg
+  //    Magenta ~ 325 deg
+  float hue_shift_red;
+  float hue_shift_yellow;
+  float hue_shift_green;
+  float hue_shift_cyan;
+  float hue_shift_blue;
+  float hue_shift_magenta;
+
+  // --- Utilities ---
   float mix;
   bool clamp_output;
   bool bypass;
@@ -18,12 +51,26 @@ param:
     defineParam(l_offset, "L Offset", 0.0f);
     defineParam(c_gain, "C Gain", 1.0f);
     defineParam(c_offset, "C Offset", 0.0f);
+
     defineParam(hue_shift_deg, "Hue Shift (deg)", 0.0f);
+    defineParam(hue_chroma_threshold, "Hue Chroma Threshold", 0.05f);
+
+    defineParam(hue_shift_red, "Hue Shift Red", 0.0f);
+    defineParam(hue_shift_yellow, "Hue Shift Yellow", 0.0f);
+    defineParam(hue_shift_green, "Hue Shift Green", 0.0f);
+    defineParam(hue_shift_cyan, "Hue Shift Cyan", 0.0f);
+    defineParam(hue_shift_blue, "Hue Shift Blue", 0.0f);
+    defineParam(hue_shift_magenta, "Hue Shift Magenta", 0.0f);
+
     defineParam(mix, "Mix", 1.0f);
     defineParam(clamp_output, "Clamp Output", false);
     defineParam(bypass, "Bypass", false);
     defineParam(debug_mode, "Debug Mode", 0);
   }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
 
   float signed_cbrt(float x) {
     if (x == 0.0f)
@@ -33,10 +80,46 @@ param:
 
   float clamp01(float x) { return clamp(x, 0.0f, 1.0f); }
 
+  // Smoothstep is not a Blink built-in (it is GLSL-only).
+  // This replicates the standard cubic Hermite polynomial: 3t^2 - 2t^3
+  float smooth_ramp(float edge0, float edge1, float x) {
+    float t = clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+  }
+
   float wrap_hue_deg(float h) {
     float wrapped = h - 360.0f * floor(h / 360.0f);
     return (wrapped < 0.0f) ? wrapped + 360.0f : wrapped;
   }
+
+  // Shortest angular distance from angle a to angle b, in degrees.
+  // Returns a value in [-180, 180].
+  float hue_delta(float a, float b) {
+    float d = wrap_hue_deg(b) - wrap_hue_deg(a);
+    if (d > 180.0f)
+      d -= 360.0f;
+    if (d < -180.0f)
+      d += 360.0f;
+    return d;
+  }
+
+  // Cosine-window hue band weight.
+  // Returns 1 at centre_deg, 0 at +/-half_width_deg, smooth in between.
+  // Clamped to [0,1] so it never goes negative at the edges.
+  float hue_band_weight(float current_hue, float centre_deg,
+                        float half_width_deg) {
+    float delta = hue_delta(current_hue, centre_deg);
+    float norm = delta / half_width_deg; // -1 to 1 at the edges
+    if (norm < -1.0f || norm > 1.0f)
+      return 0.0f;
+    // cos(pi * norm): 1 at centre, 0 at edges, smooth cosine falloff
+    float pi = 3.1415926536f;
+    return 0.5f * (1.0f + cos(pi * norm));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Colour space conversion matrices
+  // ---------------------------------------------------------------------------
 
   float3 linear_srgb_to_xyz(float3 rgb) {
     // CSS Color 4: lin_sRGB_to_XYZ (D65)
@@ -128,6 +211,10 @@ param:
     return float3(lch.x, a, b);
   }
 
+  // ---------------------------------------------------------------------------
+  // Process
+  // ---------------------------------------------------------------------------
+
   void process() {
     float4 src_pixel = src();
     float3 in_rgb = float3(max(0.0f, src_pixel.x), max(0.0f, src_pixel.y),
@@ -142,15 +229,54 @@ param:
     float3 current_lab = xyz_to_oklab(current_xyz);
     float3 current_lch = oklab_to_oklch(current_lab);
 
+    // --- Grade L and C ---
     float graded_L = (current_lch.x * l_gain) + l_offset;
     float graded_C = (current_lch.y * c_gain) + c_offset;
-    float graded_H = wrap_hue_deg(current_lch.z + hue_shift_deg);
 
     if (graded_L < 0.0f)
       graded_L = 0.0f;
     if (graded_C < 0.0f)
       graded_C = 0.0f;
 
+    // --- Grade H ---
+    // Feature 1: Chroma-based weight.
+    // Below hue_chroma_threshold, all hue shifts fade to zero — achromatic
+    // pixels (neutrals, near-blacks, near-whites) are left untouched.
+    // smooth_ramp() is our own cubic Hermite (smoothstep is GLSL-only, not
+    // Blink).
+    float safe_threshold = max(hue_chroma_threshold, 0.0001f);
+    float chroma_weight = smooth_ramp(0.0f, safe_threshold, current_lch.y);
+
+    // Feature 2: Global hue shift weighted by chroma.
+    float total_hue_shift = hue_shift_deg * chroma_weight;
+
+    // Feature 2: Per-band hue shifts, each using a 60-degree half-width cosine
+    // window. Band centre angles are perceptually placed on the OKLCH hue
+    // wheel.
+    float half = 60.0f;
+    float orig_H = current_lch.z;
+
+    total_hue_shift +=
+        hue_shift_red * hue_band_weight(orig_H, 0.0f, half) * chroma_weight;
+    total_hue_shift +=
+        hue_shift_yellow * hue_band_weight(orig_H, 85.0f, half) * chroma_weight;
+    total_hue_shift +=
+        hue_shift_green * hue_band_weight(orig_H, 145.0f, half) * chroma_weight;
+    total_hue_shift +=
+        hue_shift_cyan * hue_band_weight(orig_H, 195.0f, half) * chroma_weight;
+    total_hue_shift +=
+        hue_shift_blue * hue_band_weight(orig_H, 265.0f, half) * chroma_weight;
+    total_hue_shift += hue_shift_magenta *
+                       hue_band_weight(orig_H, 325.0f, half) * chroma_weight;
+
+    // Red band wraps around 360/0 — add a second lobe at 360 to catch hues near
+    // 360
+    total_hue_shift +=
+        hue_shift_red * hue_band_weight(orig_H, 360.0f, half) * chroma_weight;
+
+    float graded_H = wrap_hue_deg(orig_H + total_hue_shift);
+
+    // --- Debug modes ---
     if (debug_mode == 1) { // Lightness
       dst() = float4(graded_L, graded_L, graded_L, src_pixel.w);
       return;
@@ -164,7 +290,13 @@ param:
       dst() = float4(h_vis, h_vis, h_vis, src_pixel.w);
       return;
     }
+    if (debug_mode ==
+        4) { // Chroma weight (visualise the achromatic falloff region)
+      dst() = float4(chroma_weight, chroma_weight, chroma_weight, src_pixel.w);
+      return;
+    }
 
+    // --- Reconstruct and blend ---
     float3 out_lab = oklch_to_oklab(float3(graded_L, graded_C, graded_H));
     float3 out_xyz = oklab_to_xyz(out_lab);
     float3 graded_rgb = xyz_to_linear_srgb(out_xyz);

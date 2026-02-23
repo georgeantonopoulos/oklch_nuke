@@ -46,6 +46,8 @@ The kernel relies on Blink-provided math functions documented by Foundry:
 - trigonometric: `sin`, `cos`, `atan2`
 - power/root: `pow`, `sqrt`
 - absolute/remainder/clamp: `fabs`, `fmod`, `clamp`
+- **NOT available**: `smoothstep` — this is a GLSL built-in only.
+  Implement manually as: `float t = clamp((x-e0)/(e1-e0), 0,1); return t*t*(3-2*t);`
 
 Reference:
 - https://learn.foundry.com/nuke/developers/15.1/BlinkUserGuide/BlinkKernelAPIReference/MathsFunctions.html
