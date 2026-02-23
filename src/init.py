@@ -25,7 +25,7 @@ def _bootstrap_python_imports() -> None:
         return
 
     root = os.path.dirname(os.path.abspath(__file__))
-    nuke_dir = os.path.join(root, "nuke")
+    nuke_dir = os.path.join(root, "gizmos")
 
     if os.path.isdir(nuke_dir):
         # Register gizmos and helper scripts for all session types.

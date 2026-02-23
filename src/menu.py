@@ -16,7 +16,7 @@ MENU_GUARD_ATTR = "_oklch_grade_menu_registered"
 
 def _register_plugin_paths() -> None:
     root = os.path.dirname(os.path.abspath(__file__))
-    nuke_dir = os.path.join(root, "nuke")
+    nuke_dir = os.path.join(root, "gizmos")
     icons_dir = os.path.join(nuke_dir, "icons")
 
     if os.path.isdir(nuke_dir):
