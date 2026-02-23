@@ -149,29 +149,20 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
 
     try:
         ksf.setValue(kernel_path)
-    except Exception as exc:
-        _set_text(group_node, "status_text", f"Error setting kernel path: {exc}")
+    except Exception:
         return False
 
-    # Trigger "Reload" to read from disk
-    reload_knob = _knob(blink, "reloadKernelSourceFile")
-    if reload_knob is not None:
-            try:
-                k.execute()
-            except Exception:
-                pass
+    # Execute "Load" button specifically
+    load_button = _knob(blink, "reloadKernelSourceFile")
+    if load_button:
+        load_button.execute()
 
-    # Trigger "Compile" button
-    compile_knob = _knob(blink, "recompile")
-    if compile_knob is not None:
-        try:
-            compile_knob.execute()
-        except Exception:
-            pass
+    # Trigger recompile to ensure parameters are generated
+    compile_button = _knob(blink, "recompile")
+    if compile_button:
+        compile_button.execute()
 
-    # Verification loop. BlinkScript knob generation can be deferred.
-    # We check for 'l_gain' as it's the first parameter in our kernel.
-    # Note: In a blocking onCreate, this is the best we can do.
+    # Verification loop - wait for parameters to exist
     found = False
     for _ in range(20):
         if _knob(blink, "l_gain") is not None:
@@ -181,25 +172,15 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
         time.sleep(0.05)
 
     if not found:
-        available = sorted(blink.knobs().keys())
-        _set_text(
-            group_node, "status_text",
-            f"Error: Kernel parameters not found. Check kernel syntax. "
-            f"Knobs present: {available}"
-        )
         return False
 
-    # Once knobs are generated, set meaningful UI ranges.
+    # Apply ranges to the newly found knobs
     for knob_name, (lo, hi) in _PARAM_RANGES.items():
         k = _knob(blink, knob_name)
-        if k is not None:
-            try:
-                k.setRange(lo, hi)
-            except Exception:
-                pass
+        if k:
+            k.setRange(lo, hi)
 
     return True
-
 
 
 def _add_link_knobs(group_node: nuke.Node) -> None:
