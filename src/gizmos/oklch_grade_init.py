@@ -254,37 +254,22 @@ def _setup_working_space(group_node: nuke.Node) -> None:
     ocio_in  = group_node.node("OCIOColorSpace_IN")
     ocio_out = group_node.node("OCIOColorSpace_OUT")
     blink    = group_node.node("BlinkScript_OKLCHGrade")
-    missing  = not bool(linear_space)
-
     if ocio_in is not None:
         if linear_space and _knob(ocio_in, "out_colorspace") is not None:
             ocio_in["out_colorspace"].setValue(linear_space)
-        if _knob(ocio_in, "disable") is not None:
-            ocio_in["disable"].setValue(missing)
 
     if ocio_out is not None:
         if linear_space and _knob(ocio_out, "in_colorspace") is not None:
             ocio_out["in_colorspace"].setValue(linear_space)
-        if _knob(ocio_out, "disable") is not None:
-            ocio_out["disable"].setValue(missing)
-
-    if blink is not None:
-        if _knob(blink, "disable") is not None:
-            blink["disable"].setValue(missing)
 
     if linear_space:
         _set_text(group_node, "status_text", f"Ready. Working space: {linear_space}")
     else:
         _set_text(
             group_node, "status_text",
-            "Warning: no linear-sRGB alias found in OCIO config. Bypass enabled.",
+            "Note: no linear-sRGB alias found in OCIO config. Please check conversion settings.",
         )
-        bypass_lk = _knob(group_node, "bypass")
-        if bypass_lk is not None:
-            try:
-                bypass_lk.setValue(True)
-            except Exception:
-                pass
+
 
 
 def initialize_node(node: nuke.Node) -> None:
