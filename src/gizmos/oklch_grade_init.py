@@ -16,15 +16,15 @@ LINEAR_SRGB_ALIASES = (
 
 # Used only by _add_link_knobs — order determines panel appearance.
 _GRADE_LINK_DEFS = (
-    ("l_gain",        "L Gain",          "BlinkScript_OKLCHGrade.l_gain"),
-    ("l_offset",      "L Offset",        "BlinkScript_OKLCHGrade.l_offset"),
-    ("c_gain",        "C Gain",          "BlinkScript_OKLCHGrade.c_gain"),
-    ("c_offset",      "C Offset",        "BlinkScript_OKLCHGrade.c_offset"),
-    ("hue_shift_deg", "Hue Shift (deg)", "BlinkScript_OKLCHGrade.hue_shift_deg"),
-    ("mix",           "Mix",             "BlinkScript_OKLCHGrade.mix"),
-    ("clamp_output",  "Clamp Output",    "BlinkScript_OKLCHGrade.clamp_output"),
-    ("bypass",        "Bypass",          "BlinkScript_OKLCHGrade.bypass"),
-    ("debug_mode",    "Debug Mode",      "BlinkScript_OKLCHGrade.debug_mode"),
+    ("l_gain",        "L Gain",          "BlinkScript_OKLCHGrade.OKLCHGrade_L Gain"),
+    ("l_offset",      "L Offset",        "BlinkScript_OKLCHGrade.OKLCHGrade_L Offset"),
+    ("c_gain",        "C Gain",          "BlinkScript_OKLCHGrade.OKLCHGrade_C Gain"),
+    ("c_offset",      "C Offset",        "BlinkScript_OKLCHGrade.OKLCHGrade_C Offset"),
+    ("hue_shift_deg", "Hue Shift (deg)", "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift (deg)"),
+    ("mix",           "Mix",             "BlinkScript_OKLCHGrade.OKLCHGrade_Mix"),
+    ("clamp_output",  "Clamp Output",    "BlinkScript_OKLCHGrade.OKLCHGrade_Clamp Output"),
+    ("bypass",        "Bypass",          "BlinkScript_OKLCHGrade.OKLCHGrade_Bypass"),
+    ("debug_mode",    "Debug Mode",      "BlinkScript_OKLCHGrade.OKLCHGrade_Debug Mode"),
 )
 
 # Slider ranges for BlinkScript float params.
@@ -32,12 +32,12 @@ _GRADE_LINK_DEFS = (
 # so Nuke assigns a default range (often -1..1 or 0..1) after compilation.
 # These must be applied via setRange() after recompile.execute().
 _PARAM_RANGES = {
-    "l_gain":        (-8.0,   8.0),
-    "l_offset":      (-2.0,   2.0),
-    "c_gain":        (-8.0,   8.0),
-    "c_offset":      (-2.0,   2.0),
-    "hue_shift_deg": (-360.0, 360.0),
-    "mix":           (0.0,    1.0),
+    "OKLCHGrade_L Gain":        (-8.0,   8.0),
+    "OKLCHGrade_L Offset":      (-2.0,   2.0),
+    "OKLCHGrade_C Gain":        (-8.0,   8.0),
+    "OKLCHGrade_C Offset":      (-2.0,   2.0),
+    "OKLCHGrade_Hue Shift (deg)": (-360.0, 360.0),
+    "OKLCHGrade_Mix":           (0.0,    1.0),
 }
 
 _COLORSPACE_LINK_DEFS = (
@@ -149,32 +149,30 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
 
     try:
         ksf.setValue(kernel_path)
-    except Exception:
+    except Exception as exc:
+        _set_text(group_node, "status_text", f"Error setting path: {exc}")
         return False
 
-    # Execute "Load" button specifically
+    # Execute the Load button to read the file into the node
     load_button = _knob(blink, "reloadKernelSourceFile")
     if load_button:
         load_button.execute()
 
-    # Trigger recompile to ensure parameters are generated
+    # Recompile is synchronous — knobs exist immediately after
     compile_button = _knob(blink, "recompile")
     if compile_button:
         compile_button.execute()
 
-    # Verification loop - wait for parameters to exist
-    found = False
-    for _ in range(20):
-        if _knob(blink, "l_gain") is not None:
-            found = True
-            break
-        import time
-        time.sleep(0.05)
-
-    if not found:
+    # Check if compilation succeeded by looking for the first param knob
+    if _knob(blink, "OKLCHGrade_L Gain") is None:
+        available = sorted(k for k in blink.knobs().keys() if not k.startswith("__"))
+        _set_text(
+            group_node, "status_text",
+            f"Error: Kernel params missing after compile. Present: {available}"
+        )
         return False
 
-    # Apply ranges to the newly found knobs
+    # Set meaningful UI ranges on the param knobs
     for knob_name, (lo, hi) in _PARAM_RANGES.items():
         k = _knob(blink, knob_name)
         if k:
@@ -251,17 +249,25 @@ def _setup_working_space(group_node: nuke.Node) -> None:
 
 def initialize_node(node: nuke.Node) -> None:
     """Called from gizmo onCreate: compile kernel, add Link_Knobs, wire OCIO."""
-    _hide_tech_knobs(node)
-    
-    # 1. Load and compile kernel
-    if not _load_kernel_source(node):
-        return
+    try:
+        # Guard: confirm we have the correct top-level group node
+        if _knob(node, "working_linear_srgb_space") is None:
+            return
 
-    # 2. Add Link_Knobs (now guaranteed that param knobs exist)
-    _add_link_knobs(node)
-    
-    # 3. Setup OCIO
-    _setup_working_space(node)
+        _hide_tech_knobs(node)
+
+        # 1. Load and compile kernel
+        if not _load_kernel_source(node):
+            return
+
+        # 2. Add Link_Knobs (param knobs now guaranteed to exist)
+        _add_link_knobs(node)
+
+        # 3. Wire OCIO working space
+        _setup_working_space(node)
+
+    except Exception as exc:
+        _set_text(node, "status_text", f"Init error: {exc}")
 
 
 def handle_knob_changed(node: nuke.Node, changed_knob) -> None:
