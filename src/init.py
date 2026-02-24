@@ -2,9 +2,8 @@
 Nuke startup bootstrap (non-UI).
 
 Purpose:
-- register the bundled `nuke` plugin directory so gizmos/scripts are available
+- register the bundled `gizmos` plugin directory so gizmos/icons are available
   in GUI and headless sessions.
-- ensure `oklch_grade_init.py` is importable by gizmo callbacks.
 
 UI concerns (toolbar/menu commands) are handled in `menu.py`.
 """

@@ -8,8 +8,6 @@ A Nuke gizmo + Blink kernel that performs grading in OKLCH while converting from
   - Blink kernel implementing linear-sRGB <-> OKLab/OKLCH conversion and grade controls.
 - `src/gizmos/OKLCH_Grade.gizmo`
   - Group/gizmo wrapper with input/output colorspace dropdowns and user controls.
-- `src/gizmos/oklch_grade_init.py`
-  - Python helpers for dynamic OCIO menu population, working-space detection, and internal node sync.
 - `research/`
   - Source-backed notes for Blink syntax, OCIO wiring, and OKLCH math constants.
 - `tests/oklch_reference_test_vectors.md`
@@ -36,16 +34,8 @@ Public controls on the gizmo:
 
 ## Internal working-space behavior
 
-The Blink kernel is defined in linear-sRGB.
-
-On init, `oklch_grade_init.py` resolves a working-space alias in this order:
-
-1. `Utility - Linear - sRGB`
-2. `lin_srgb`
-3. `Linear sRGB`
-4. `srgb_linear`
-
-If none is present, the tool enters fail-safe mode (warning + bypass).
+The baked gizmo contains a compiled BlinkScript kernel and pre-linked controls.
+Menu scripts only register plugin paths and add the gizmo creation command.
 
 ## Installation
 
@@ -54,8 +44,8 @@ If none is present, the tool enters fail-safe mode (warning + bypass).
    - `/Users/georgeantonopoulos/Dev/oklch_nuke/src`
 2. Restart Nuke.
 3. Nuke startup hooks used by this repo:
-   - `init.py` for non-UI bootstrap (plugin paths + Python importability)
-   - `menu.py` for UI registration (toolbar/menu command)
+   - `init.py` for non-UI bootstrap (plugin paths)
+   - `menu.py` for UI registration (single gizmo menu command)
 4. The UI hook adds:
    - `Nodes > Color > OKLCH > OKLCH Grade`
    - icon: `oklch_grade.png`
@@ -71,8 +61,6 @@ Example `NUKE_PATH` setup (repo-root form):
 ```python
 import nuke
 print("plugin paths:", nuke.pluginPath())
-import oklch_grade_init
-print("oklch_grade_init import: OK")
 try:
     node = nuke.createNode("OKLCH_Grade", inpanel=False)
     print("OKLCH_Grade creation: OK")
@@ -82,10 +70,6 @@ except Exception as exc:
 ```
 
 If node creation fails, your `NUKE_PATH` is not pointing at the expected location or startup scripts are not being executed.
-
-Optional override for kernel source path:
-
-- set environment variable `OKLCH_GRADE_KERNEL_PATH` to an absolute `.cpp` path.
 
 ## Verification checklist
 
