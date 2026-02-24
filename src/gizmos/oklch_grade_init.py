@@ -94,6 +94,36 @@ def _knob(node: nuke.Node, name: str):
     return node.knob(name)
 
 
+def _is_oklch_group_node(node: nuke.Node) -> bool:
+    """Return True when `node` is the top-level OKLCH gizmo Group."""
+    try:
+        if node is None or node.Class() != "Group":
+            return False
+        return node.node("BlinkScript_OKLCHGrade") is not None
+    except Exception:
+        return False
+
+
+def _ensure_base_knobs(group_node: nuke.Node) -> None:
+    """Ensure the main tab and foundational public/tech knobs exist.
+
+    The `OKLCH Grade` tab, `status_text`, and `working_linear_srgb_space` are
+    created here (at runtime) so all subsequently added controls share the same
+    tab ownership model. Mixing static gizmo-defined knobs with dynamic
+    addKnob() calls can cause runtime-added knobs to land in `User`.
+    """
+    if group_node.knob("OKLCHGrade") is None:
+        group_node.addKnob(nuke.Tab_Knob("OKLCHGrade", "OKLCH Grade"))
+
+    if group_node.knob("status_text") is None:
+        group_node.addKnob(nuke.Text_Knob("status_text", "Status", "Initializing..."))
+
+    if group_node.knob("working_linear_srgb_space") is None:
+        wk = nuke.String_Knob("working_linear_srgb_space", "Working Linear sRGB")
+        wk.setValue("")
+        group_node.addKnob(wk)
+
+
 def get_ocio_colorspaces() -> List[str]:
     """Return colorspaces from the active OCIO config via nuke.getOcioColorSpaces()."""
     try:
@@ -351,10 +381,11 @@ def _setup_working_space(group_node: nuke.Node) -> None:
 def initialize_node(node: nuke.Node) -> None:
     """Called from gizmo onCreate: compile kernel, add Link_Knobs, wire OCIO."""
     try:
-        # Guard: confirm we have the correct top-level group node
-        if _knob(node, "working_linear_srgb_space") is None:
+        # Guard: confirm we have the correct top-level group node.
+        if not _is_oklch_group_node(node):
             return
 
+        _ensure_base_knobs(node)
         _hide_tech_knobs(node)
 
         # 1. Load and compile kernel
@@ -381,5 +412,5 @@ def handle_knob_changed(node: nuke.Node, changed_knob) -> None:
     """
     if changed_knob is None:
         return
-    if _knob(node, "working_linear_srgb_space") is None:
+    if not _is_oklch_group_node(node):
         return
