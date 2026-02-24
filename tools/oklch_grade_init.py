@@ -67,18 +67,18 @@ _PARAM_RANGES = {
     "OKLCHGrade_C Gain":               (0.0,    2.0),
     "OKLCHGrade_C Offset":             (-0.5,   0.5),
     # Global hue
-    "OKLCHGrade_Hue Shift (deg)":      (-180.0, 180.0),
+    "OKLCHGrade_Hue Shift (deg)":      (-360.0, 360.0),
     # Chroma threshold: 0 = shift everything, 0.2 = aggressive grey protection.
     # OKLCH chroma for sRGB colours typically spans 0..~0.37; a threshold of
     # 0.05 protects near-neutral values while leaving saturated colours free.
     "OKLCHGrade_Hue Chroma Threshold": (0.0,    0.2),
     # Hue band selectors — same degree range as global shift
-    "OKLCHGrade_Hue Shift Red":        (-90.0,  90.0),
-    "OKLCHGrade_Hue Shift Yellow":     (-90.0,  90.0),
-    "OKLCHGrade_Hue Shift Green":      (-90.0,  90.0),
-    "OKLCHGrade_Hue Shift Cyan":       (-90.0,  90.0),
-    "OKLCHGrade_Hue Shift Blue":       (-90.0,  90.0),
-    "OKLCHGrade_Hue Shift Magenta":    (-90.0,  90.0),
+    "OKLCHGrade_Hue Shift Red":        (-180.0, 180.0),
+    "OKLCHGrade_Hue Shift Yellow":     (-180.0, 180.0),
+    "OKLCHGrade_Hue Shift Green":      (-180.0, 180.0),
+    "OKLCHGrade_Hue Shift Cyan":       (-180.0, 180.0),
+    "OKLCHGrade_Hue Shift Blue":       (-180.0, 180.0),
+    "OKLCHGrade_Hue Shift Magenta":    (-180.0, 180.0),
     # Utilities
     "OKLCHGrade_Mix":                  (0.0,    1.0),
 }
