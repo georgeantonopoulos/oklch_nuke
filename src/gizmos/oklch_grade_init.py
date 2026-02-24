@@ -14,30 +14,45 @@ LINEAR_SRGB_ALIASES = (
     "srgb_linear",
 )
 
+# NO_RERENDER flag — prevents divider knobs from dirtying the node hash.
+_NO_RERENDER = 0x0000000000004000
+
 # Used only by _add_link_knobs — order determines panel appearance.
 # Tuples: (knob_name, label, link_target).
-# A tuple with a None link_target signals a UI divider (Text_Knob separator).
+#
+# Divider entries:  name='', label='', target=None
+#   → emits Text_Knob('', '') which Nuke draws as a horizontal rule.
+#
+# Content entries:  name=<str>, label='', target=None
+#   → emits a named Text_Knob carrying text/tooltip (e.g. hue_bands_divider).
+#
+# Link entries:     name=<str>, label=<str>, target=<str>
+#   → emits a Link_Knob pointing at the given internal knob.
 _GRADE_LINK_DEFS = (
     # --- Lightness & Chroma ---
-    ("l_gain",                  "L Gain",               "BlinkScript_OKLCHGrade.OKLCHGrade_L Gain"),
-    ("l_offset",                "L Offset",             "BlinkScript_OKLCHGrade.OKLCHGrade_L Offset"),
-    ("c_gain",                  "C Gain",               "BlinkScript_OKLCHGrade.OKLCHGrade_C Gain"),
-    ("c_offset",                "C Offset",             "BlinkScript_OKLCHGrade.OKLCHGrade_C Offset"),
+    ("l_gain",               "L Gain",               "BlinkScript_OKLCHGrade.OKLCHGrade_L Gain"),
+    ("l_offset",             "L Offset",             "BlinkScript_OKLCHGrade.OKLCHGrade_L Offset"),
+    ("c_gain",               "C Gain",               "BlinkScript_OKLCHGrade.OKLCHGrade_C Gain"),
+    ("c_offset",             "C Offset",             "BlinkScript_OKLCHGrade.OKLCHGrade_C Offset"),
+    ("",                     "",                     None),  # ── divider ──
     # --- Global Hue ---
-    ("hue_shift_deg",           "Hue Shift (deg)",      "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift (deg)"),
-    ("hue_chroma_threshold",    "Hue Chroma Threshold", "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Chroma Threshold"),
-    # --- Hue Band Selectors (divider inserted in _add_link_knobs) ---
-    ("hue_shift_red",           "Hue Shift Red",        "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Red"),
-    ("hue_shift_yellow",        "Hue Shift Yellow",     "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Yellow"),
-    ("hue_shift_green",         "Hue Shift Green",      "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Green"),
-    ("hue_shift_cyan",          "Hue Shift Cyan",       "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Cyan"),
-    ("hue_shift_blue",          "Hue Shift Blue",       "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Blue"),
-    ("hue_shift_magenta",       "Hue Shift Magenta",    "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Magenta"),
+    ("hue_shift_deg",        "Hue Shift (deg)",      "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift (deg)"),
+    ("hue_chroma_threshold", "Hue Chroma Threshold", "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Chroma Threshold"),
+    ("",                     "",                     None),  # ── divider ──
+    # --- Hue Band Selectors (named content block, carries tooltip text) ---
+    ("hue_bands_divider",    "",                     None),
+    ("hue_shift_red",        "Hue Shift Red",        "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Red"),
+    ("hue_shift_yellow",     "Hue Shift Yellow",     "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Yellow"),
+    ("hue_shift_green",      "Hue Shift Green",      "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Green"),
+    ("hue_shift_cyan",       "Hue Shift Cyan",       "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Cyan"),
+    ("hue_shift_blue",       "Hue Shift Blue",       "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Blue"),
+    ("hue_shift_magenta",    "Hue Shift Magenta",    "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Magenta"),
+    ("",                     "",                     None),  # ── divider ──
     # --- Utilities ---
-    ("mix",                     "Mix",                  "BlinkScript_OKLCHGrade.OKLCHGrade_Mix"),
-    ("clamp_output",            "Clamp Output",         "BlinkScript_OKLCHGrade.OKLCHGrade_Clamp Output"),
-    ("bypass",                  "Bypass",               "BlinkScript_OKLCHGrade.OKLCHGrade_Bypass"),
-    ("debug_mode",              "Debug Mode",           "BlinkScript_OKLCHGrade.OKLCHGrade_Debug Mode"),
+    ("mix",                  "Mix",                  "BlinkScript_OKLCHGrade.OKLCHGrade_Mix"),
+    ("clamp_output",         "Clamp Output",         "BlinkScript_OKLCHGrade.OKLCHGrade_Clamp Output"),
+    ("bypass",               "Bypass",               "BlinkScript_OKLCHGrade.OKLCHGrade_Bypass"),
+    ("debug_mode",           "Debug Mode",           "BlinkScript_OKLCHGrade.OKLCHGrade_Debug Mode"),
 )
 
 # Slider ranges for BlinkScript float params.
@@ -71,6 +86,7 @@ _PARAM_RANGES = {
 _COLORSPACE_LINK_DEFS = (
     ("input_colorspace",  "Input Colorspace",  "OCIOColorSpace_IN.in_colorspace"),
     ("output_colorspace", "Output Colorspace", "OCIOColorSpace_OUT.out_colorspace"),
+    ("",                  "",                  None),  # ── divider ──
 )
 
 
@@ -236,44 +252,68 @@ _HUE_BAND_TOOLTIP = (
     "  Magenta  ~ 325°"
 )
 
-# Knob names that mark the start of the hue-band section (divider goes before them).
-_HUE_BAND_FIRST = "hue_shift_red"
-
 
 def _add_link_knobs(group_node: nuke.Node) -> None:
     """Add Link_Knobs that directly reference internal node knobs.
 
     Must be called after _load_kernel_source so the BlinkScript kernel param
-    knobs exist.  Any knob name that already exists on the gizmo is skipped,
-    so this is safe to call on script reopen.
+    knobs exist.
+
+    Re-entry guard: if the first named link knob (input_colorspace) already
+    exists on the node, all knobs — including the anonymous dividers that
+    cannot be found by name — were already added.  Bail out immediately.
 
     Link_Knob is bidirectional, updates instantly at eval time with no Python
     overhead, and preserves the correct widget type (checkbox stays a checkbox,
     not an expression field).
     """
+    # Fast re-entry guard — unnamed dividers can't be found by knob(), so we
+    # use the first named knob as a proxy for the whole block.
+    if group_node.knob("input_colorspace") is not None:
+        return
+
     all_defs = _COLORSPACE_LINK_DEFS + _GRADE_LINK_DEFS
 
-    # Ensure we are adding knobs to the correct tab.
-    # Adding a Tab_Knob with the same name as an existing one sets the focus.
-    group_node.addKnob(nuke.Tab_Knob("OKLCHGrade", "OKLCH Grade"))
+    # Add the tab only if it doesn't already exist.
+    # Calling addKnob with a Tab_Knob whose name already exists creates a
+    # *duplicate* tab rather than selecting the existing one, which produces
+    # two "OKLCH Grade" tabs — one holding status_text and one holding the
+    # link knobs added below.
+    if group_node.knob("OKLCHGrade") is None:
+        group_node.addKnob(nuke.Tab_Knob("OKLCHGrade", "OKLCH Grade"))
 
     for (name, label, target) in all_defs:
-        # Insert a divider + annotation before the hue-band section.
-        if name == _HUE_BAND_FIRST and group_node.knob("hue_bands_divider") is None:
+        if target is None:
+            if name == "":
+                # True horizontal-rule divider: empty name AND empty label.
+                # Text_Knob('', '') is what Nuke uses for its own "Divider Line"
+                # control.  NO_RERENDER stops it from dirtying the node hash.
+                try:
+                    div = nuke.Text_Knob("", "")
+                    div.setFlag(_NO_RERENDER)
+                    group_node.addKnob(div)
+                except Exception:
+                    pass
+            else:
+                # Named content block (e.g. hue_bands_divider tooltip).
+                # Skip if already present.
+                if group_node.knob(name) is not None:
+                    continue
+                text_value = _HUE_BAND_TOOLTIP if name == "hue_bands_divider" else ""
+                try:
+                    group_node.addKnob(nuke.Text_Knob(name, "", text_value))
+                except Exception:
+                    pass
+        else:
+            # Named Link_Knob — skip if already present.
+            if group_node.knob(name) is not None:
+                continue
             try:
-                div = nuke.Text_Knob("hue_bands_divider", "", _HUE_BAND_TOOLTIP)
-                group_node.addKnob(div)
+                lk = nuke.Link_Knob(name, label)
+                lk.setLink(target)
+                group_node.addKnob(lk)
             except Exception:
                 pass
-
-        if group_node.knob(name) is not None:
-            continue
-        try:
-            lk = nuke.Link_Knob(name, label)
-            lk.setLink(target)
-            group_node.addKnob(lk)
-        except Exception:
-            pass
 
 
 def _setup_working_space(group_node: nuke.Node) -> None:
