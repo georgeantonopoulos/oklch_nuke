@@ -97,9 +97,7 @@ def _knob(node: nuke.Node, name: str):
 def _is_oklch_group_node(node: nuke.Node) -> bool:
     """Return True when `node` is the top-level OKLCH gizmo Group."""
     try:
-        if node is None or node.Class() != "Group":
-            return False
-        return node.node("BlinkScript_OKLCHGrade") is not None
+        return node is not None and node.Class() == "Group"
     except Exception:
         return False
 
