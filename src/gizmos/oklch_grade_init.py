@@ -174,6 +174,11 @@ def _set_text(node: nuke.Node, knob_name: str, value: str) -> None:
         pass
 
 
+def _has_link_knobs(node: nuke.Node) -> bool:
+    """Return True when main runtime link knobs were added."""
+    return _knob(node, "input_colorspace") is not None
+
+
 def _hide_tech_knobs(node: nuke.Node) -> None:
     for name in ("working_linear_srgb_space",):
         k = _knob(node, name)
@@ -217,7 +222,7 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
     """
     blink = group_node.node("BlinkScript_OKLCHGrade")
     if blink is None:
-        _set_text(group_node, "status_text", "Error: BlinkScript node not found.")
+        _set_text(group_node, "status_text", "Waiting: BlinkScript node not ready yet.")
         return False
 
     kernel_path = _find_kernel_path()
@@ -386,6 +391,10 @@ def initialize_node(node: nuke.Node) -> None:
         _ensure_base_knobs(node)
         _hide_tech_knobs(node)
 
+        # Already initialized; keep this idempotent for repeated callbacks.
+        if _has_link_knobs(node):
+            return
+
         # 1. Load and compile kernel
         if not _load_kernel_source(node):
             return
@@ -412,6 +421,9 @@ def handle_knob_changed(node: nuke.Node, changed_knob) -> None:
         return
     if not _is_oklch_group_node(node):
         return
+    # Retry initialization if onCreate ran before Blink internals were ready.
+    if not _has_link_knobs(node):
+        initialize_node(node)
 
 
 def initialize_this_node() -> None:
