@@ -37,7 +37,11 @@ def _add_toolbar_entry() -> None:
     command = "nuke.createNode('OKLCH_Grade')"
 
     t = nuke.menu("Nodes")
+    if t is None:
+        return
     t.addCommand("Color/OKLCH/OKLCH Grade", command, icon=icon)
+    u = t.addMenu("OKLCH", icon=icon)
+    u.addCommand("OKLCH Grade", command, icon=icon)
 
 
     setattr(nuke, MENU_GUARD_ATTR, True)

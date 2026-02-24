@@ -17,7 +17,25 @@ _MENU_GUARD_ATTR = "_oklch_grade_menu_registered"
 nuke.pluginAddPath(_gizmos_dir)
 nuke.pluginAddPath(_icons_dir)
 
-if not getattr(nuke, _MENU_GUARD_ATTR, False):
-    t = nuke.menu("Nodes")
-    t.addCommand("Color/OKLCH/OKLCH Grade", "nuke.createNode('OKLCH_Grade')", icon="oklch_grade.png")
+def _add_menu_entries() -> None:
+    if getattr(nuke, _MENU_GUARD_ATTR, False):
+        return
+
+    nodes_menu = nuke.menu("Nodes")
+    if nodes_menu is None:
+        return
+
+    icon_path = os.path.join(_icons_dir, "oklch_grade.png")
+    icon = icon_path if os.path.isfile(icon_path) else "oklch_grade.png"
+    command = "nuke.createNode('OKLCH_Grade')"
+
+    # Keep the canonical Color location.
+    nodes_menu.addCommand("Color/OKLCH/OKLCH Grade", command, icon=icon)
+    # Also expose top-level entry to avoid discoverability regressions.
+    top = nodes_menu.addMenu("OKLCH", icon=icon)
+    top.addCommand("OKLCH Grade", command, icon=icon)
+
     setattr(nuke, _MENU_GUARD_ATTR, True)
+
+
+_add_menu_entries()
