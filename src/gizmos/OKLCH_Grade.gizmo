@@ -9,36 +9,43 @@ Gizmo {
  addUserKnob {41 input_colorspace l "Input Colorspace" T OCIOColorSpace_IN.in_colorspace}
  addUserKnob {41 output_colorspace l "Output Colorspace" T OCIOColorSpace_OUT.out_colorspace}
  addUserKnob {20 colorspace_group_end n -1}
- addUserKnob {26 spacer_1 l "" +STARTLINE}
+ addUserKnob {26 "" +STARTLINE}
  addUserKnob {20 grade_group l "Lightness & Chroma" n 1}
- addUserKnob {41 l_gain l "Lightness Gain" T "BlinkScript_OKLCHGrade.OKLCHGrade_L Gain"}
- addUserKnob {41 l_offset l Offset -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_L Offset"}
- addUserKnob {41 c_gain l "Chroma Gain" T "BlinkScript_OKLCHGrade.OKLCHGrade_C Gain"}
- addUserKnob {41 c_offset l Offset -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_C Offset"}
+ addUserKnob {41 l_gain l "L Gain" T "BlinkScript_OKLCHGrade.OKLCHGrade_L Gain"}
+ addUserKnob {41 l_offset l "L Offset" T "BlinkScript_OKLCHGrade.OKLCHGrade_L Offset"}
+ addUserKnob {41 c_gain l "C Gain" T "BlinkScript_OKLCHGrade.OKLCHGrade_C Gain"}
+ addUserKnob {41 c_offset l "C Offset" T "BlinkScript_OKLCHGrade.OKLCHGrade_C Offset"}
  addUserKnob {20 grade_group_end n -1}
- addUserKnob {26 spacer_2 l "" +STARTLINE}
+ addUserKnob {26 "" +STARTLINE}
  addUserKnob {20 hue_group l Hue n 1}
- addUserKnob {41 hue_shift_deg l "Global Shift (deg)" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift (deg)"}
- addUserKnob {41 hue_chroma_threshold l "Achromatic Threshold" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Chroma Threshold"}
- addUserKnob {26 spacer_3 l "" +STARTLINE}
+ addUserKnob {41 hue_shift_deg l "Hue Shift (deg)" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift (deg)"}
+ addUserKnob {41 hue_chroma_threshold l "Hue Chroma Threshold" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Chroma Threshold"}
+ addUserKnob {26 "" +STARTLINE}
  addUserKnob {26 hue_bands_label l "" +STARTLINE T "<b>Hue Band Selectors</b> <small>(85° Cosine Window)</small>"}
- addUserKnob {41 hue_shift_red l "<font color='#FF6666'>Red</font> shift" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Red"}
- addUserKnob {41 hue_shift_yellow l "<font color='#EEEE66'>Yellow</font> shift" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Yellow"}
- addUserKnob {41 hue_shift_green l "<font color='#66FF66'>Green</font> shift" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Green"}
- addUserKnob {41 hue_shift_cyan l "<font color='#66FFFF'>Cyan</font> shift" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Cyan"}
- addUserKnob {41 hue_shift_blue l "<font color='#6666FF'>Blue</font> shift" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Blue"}
- addUserKnob {41 hue_shift_magenta l "<font color='#FF66FF'>Magenta</font> shift" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Magenta"}
+ addUserKnob {26 dot_red l "<font color='#FF6666'>●</font>" +STARTLINE T ""}
+ addUserKnob {41 hue_shift_red l "Hue Shift Red" -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Red"}
+ addUserKnob {26 dot_yellow l "<font color='#EEEE66'>●</font>" +STARTLINE T ""}
+ addUserKnob {41 hue_shift_yellow l "Hue Shift Yellow" -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Yellow"}
+ addUserKnob {26 dot_green l "<font color='#66FF66'>●</font>" +STARTLINE T ""}
+ addUserKnob {41 hue_shift_green l "Hue Shift Green" -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Green"}
+ addUserKnob {26 dot_cyan l "<font color='#66FFFF'>●</font>" +STARTLINE T ""}
+ addUserKnob {41 hue_shift_cyan l "Hue Shift Cyan" -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Cyan"}
+ addUserKnob {26 dot_blue l "<font color='#6666FF'>●</font>" +STARTLINE T ""}
+ addUserKnob {41 hue_shift_blue l "Hue Shift Blue" -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Blue"}
+ addUserKnob {26 dot_magenta l "<font color='#FF66FF'>●</font>" +STARTLINE T ""}
+ addUserKnob {41 hue_shift_magenta l "Hue Shift Magenta" -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Magenta"}
  addUserKnob {20 hue_group_end n -1}
- addUserKnob {26 spacer_4 l "" +STARTLINE}
+ addUserKnob {26 "" +STARTLINE}
  addUserKnob {41 mix l Mix T BlinkScript_OKLCHGrade.OKLCHGrade_Mix}
  addUserKnob {41 clamp_output l "Clamp Output" T "BlinkScript_OKLCHGrade.OKLCHGrade_Clamp Output"}
  addUserKnob {20 advanced_tab l Advanced}
  addUserKnob {41 bypass l Bypass T BlinkScript_OKLCHGrade.OKLCHGrade_Bypass}
  addUserKnob {41 debug_mode l "Debug Mode" T "BlinkScript_OKLCHGrade.OKLCHGrade_Debug Mode"}
  addUserKnob {1 working_linear_srgb_space l "Working Linear sRGB" +INVISIBLE}
- addUserKnob {26 spacer_5 l "" +STARTLINE}
+ addUserKnob {26 "" +STARTLINE}
  addUserKnob {26 info_label l "" +STARTLINE T "<b>Reference Anchors</b>"}
  addUserKnob {26 hue_info l "" +STARTLINE T "R: 0° | Y: 85° | G: 145° | C: 195° | B: 265° | M: 325°"}
+
 }
  Input {
   inputs 0
