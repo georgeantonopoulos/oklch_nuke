@@ -8,10 +8,12 @@ It mirrors `src/menu.py` behavior and keeps registration duplicate-safe.
 from __future__ import annotations
 
 import os
+import importlib
 
 import nuke
 
 MENU_GUARD_ATTR = "_oklch_grade_menu_registered"
+CALLBACK_GUARD_ATTR = "_oklch_grade_init_callbacks_registered"
 
 
 def _register_plugin_paths() -> None:
@@ -43,6 +45,49 @@ def _add_toolbar_entry() -> None:
     setattr(nuke, MENU_GUARD_ATTR, True)
 
 
+def _is_oklch_grade_group(node) -> bool:
+    try:
+        if node is None or node.Class() != "Group":
+            return False
+        return node.node("BlinkScript_OKLCHGrade") is not None
+    except Exception:
+        return False
+
+
+def _run_oklch_init_for_node(node) -> None:
+    if not _is_oklch_grade_group(node):
+        return
+    try:
+        import oklch_grade_init
+        importlib.reload(oklch_grade_init)
+        oklch_grade_init.initialize_node(node)
+    except Exception as exc:
+        try:
+            k = node.knob("status_text")
+            if k is not None:
+                k.setValue(f"Init error: {exc}")
+        except Exception:
+            pass
+
+
+def _init_from_this_node() -> None:
+    _run_oklch_init_for_node(nuke.thisNode())
+
+
+def _register_init_callbacks() -> None:
+    if getattr(nuke, CALLBACK_GUARD_ATTR, False):
+        return
+    nuke.addOnUserCreate(_init_from_this_node)
+    nuke.addOnCreate(_init_from_this_node)
+    setattr(nuke, CALLBACK_GUARD_ATTR, True)
+
+
+def _init_existing_nodes() -> None:
+    for node in nuke.allNodes("Group", recurseGroups=True):
+        _run_oklch_init_for_node(node)
+
+
 _register_plugin_paths()
 _add_toolbar_entry()
-
+_register_init_callbacks()
+_init_existing_nodes()

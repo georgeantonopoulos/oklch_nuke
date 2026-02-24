@@ -3,8 +3,6 @@ Gizmo {
  tile_color 0x3e5f9fff
  postage_stamp false
  inputs 1
- onCreate {import oklch_grade_init; oklch_grade_init.initialize_this_node()}
- knobChanged {import oklch_grade_init; oklch_grade_init.handle_this_knob_changed()}
  addUserKnob {20 OKLCHGrade l "OKLCH Grade"}
  addUserKnob {26 status_text l "Status" T "Not initialized"}
  addUserKnob {1 working_linear_srgb_space l "Working Linear sRGB"}
