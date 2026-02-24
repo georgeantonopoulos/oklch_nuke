@@ -230,26 +230,34 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
         _set_text(group_node, "status_text", "Error: oklch_grade_kernel.cpp not found.")
         return False
 
-    ksf = _knob(blink, "kernelSourceFile")
-    if ksf is None:
-        _set_text(group_node, "status_text", "Error: kernelSourceFile knob not found.")
+    # Read the kernel source in Python and write it to the inline kernelSource
+    # knob.  Using kernelSourceFile would switch the BlinkScript node to file
+    # mode, causing it to ignore the inline text and leaving the kernel
+    # uncompiled (no param knobs appear, no Link_Knobs can be targeted).
+    try:
+        with open(kernel_path, "r") as fh:
+            source = fh.read()
+    except Exception as exc:
+        _set_text(group_node, "status_text", f"Error reading kernel file: {exc}")
+        return False
+
+    ks = _knob(blink, "kernelSource")
+    if ks is None:
+        _set_text(group_node, "status_text", "Error: kernelSource knob not found on BlinkScript node.")
         return False
 
     try:
-        ksf.setValue(kernel_path)
+        ks.setValue(source)
     except Exception as exc:
-        _set_text(group_node, "status_text", f"Error setting path: {exc}")
+        _set_text(group_node, "status_text", f"Error setting kernel source: {exc}")
         return False
-
-    # Execute the Load button to read the file into the node
-    load_button = _knob(blink, "reloadKernelSourceFile")
-    if load_button:
-        load_button.execute()
 
     # Recompile is synchronous — knobs exist immediately after
     compile_button = _knob(blink, "recompile")
-    if compile_button:
-        compile_button.execute()
+    if compile_button is None:
+        _set_text(group_node, "status_text", "Error: recompile knob not found on BlinkScript node.")
+        return False
+    compile_button.execute()
 
     # Check if compilation succeeded by looking for the first param knob
     if _knob(blink, "OKLCHGrade_L Gain") is None:
