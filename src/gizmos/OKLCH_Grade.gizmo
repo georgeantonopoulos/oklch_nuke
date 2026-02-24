@@ -1,34 +1,47 @@
 #! /opt/Nuke16.0v2/libnuke-16.0.2.so -nx
 version 16.0 v2
 Gizmo {
+ help "<b>OKLCH Grade</b>\nPerceptually uniform color grading using the OKLCH color space. Allows for intuitive Lightness, Chroma, and Hue adjustments with a safe achromatic threshold."
  tile_color 0x3e5f9fff
  addUserKnob {20 OKLCHGrade l "OKLCH Grade"}
- addUserKnob {26 status_text l Status T "Note: no linear-sRGB alias found. Using default (check OCIO nodes)."}
+ addUserKnob {26 status_text l "" +STARTLINE T "<font color='#777777'><small><b>Status:</b> Note: no linear-sRGB alias found.</small></font>"}
+ addUserKnob {20 colorspace_group l Colorspace n 1}
+ addUserKnob {41 input_colorspace l "Input Colorspace" T OCIOColorSpace_IN.in_colorspace tooltip "Colorspace of the input image. Should be linear."}
+ addUserKnob {41 output_colorspace l "Output Colorspace" T OCIOColorSpace_OUT.out_colorspace tooltip "Colorspace of the output image."}
+ addUserKnob {20 colorspace_group_end n -1}
+ addUserKnob {26 spacer_1 l "" +STARTLINE}
+ addUserKnob {20 grade_group l "Lightness & Chroma" n 1}
+ addUserKnob {41 l_gain l "Lightness Gain" T "BlinkScript_OKLCHGrade.OKLCHGrade_L Gain" tooltip "Multiplies the Lightness (L) channel."}
+ addUserKnob {41 l_offset l Offset -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_L Offset" tooltip "Adds an offset to the Lightness (L) channel."}
+ addUserKnob {41 c_gain l "Chroma Gain" T "BlinkScript_OKLCHGrade.OKLCHGrade_C Gain" tooltip "Multiplies the Chroma (C) channel."}
+ addUserKnob {41 c_offset l Offset -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_C Offset" tooltip "Adds an offset to the Chroma (C) channel."}
+ addUserKnob {20 grade_group_end n -1}
+ addUserKnob {26 spacer_2 l "" +STARTLINE}
+ addUserKnob {20 hue_group l Hue n 1}
+ addUserKnob {41 hue_shift_deg l "Global Shift (deg)" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift (deg)" tooltip "Rotates the entire hue wheel by this amount in degrees."}
+ addUserKnob {41 hue_chroma_threshold l "Achromatic Threshold" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Chroma Threshold" tooltip "Chroma values below this threshold will not receive hue shifts, preventing color casts in neutrals."}
+ addUserKnob {26 spacer_3 l "" +STARTLINE}
+ addUserKnob {26 hue_bands_label l "" +STARTLINE T "<b>Hue Band Selectors</b> <small>(85° Cosine Window)</small>"}
+ addUserKnob {41 hue_shift_red l "<font color='#FF6666'>Red</font> shift" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Red" tooltip "Hue shift for pixels in the red range (0°)."}
+ addUserKnob {41 hue_shift_yellow l "<font color='#EEEE66'>Yellow</font> shift" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Yellow" tooltip "Hue shift for pixels in the yellow range (85°)."}
+ addUserKnob {41 hue_shift_green l "<font color='#66FF66'>Green</font> shift" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Green" tooltip "Hue shift for pixels in the green range (145°)."}
+ addUserKnob {41 hue_shift_cyan l "<font color='#66FFFF'>Cyan</font> shift" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Cyan" tooltip "Hue shift for pixels in the cyan range (195°)."}
+ addUserKnob {41 hue_shift_blue l "<font color='#6666FF'>Blue</font> shift" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Blue" tooltip "Hue shift for pixels in the blue range (265°)."}
+ addUserKnob {41 hue_shift_magenta l "<font color='#FF66FF'>Magenta</font> shift" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Magenta" tooltip "Hue shift for pixels in the magenta range (325°)."}
+ addUserKnob {20 hue_group_end n -1}
+ addUserKnob {26 spacer_4 l "" +STARTLINE}
+ addUserKnob {41 mix l Mix T BlinkScript_OKLCHGrade.OKLCHGrade_Mix tooltip "Mix between original and graded image."}
+ addUserKnob {41 clamp_output l "Clamp Output" T "BlinkScript_OKLCHGrade.OKLCHGrade_Clamp Output" tooltip "Clamps output RGB values between 0 and 1."}
+ addUserKnob {20 advanced_tab l Advanced}
+ addUserKnob {41 bypass l Bypass T BlinkScript_OKLCHGrade.OKLCHGrade_Bypass tooltip "Bypass the entire effect."}
+ addUserKnob {41 debug_mode l "Debug Mode" T "BlinkScript_OKLCHGrade.OKLCHGrade_Debug Mode" tooltip "Visualize internal channels:\n1: Lightness\n2: Chroma\n3: Hue\n4: Achromatic weight"}
  addUserKnob {1 working_linear_srgb_space l "Working Linear sRGB" +INVISIBLE}
- addUserKnob {41 input_colorspace l "Input Colorspace" T OCIOColorSpace_IN.in_colorspace}
- addUserKnob {41 output_colorspace l "Output Colorspace" T OCIOColorSpace_OUT.out_colorspace}
- addUserKnob {26 "" +STARTLINE}
- addUserKnob {41 l_gain l "L Gain" T "BlinkScript_OKLCHGrade.OKLCHGrade_L Gain"}
- addUserKnob {41 l_offset l "L Offset" T "BlinkScript_OKLCHGrade.OKLCHGrade_L Offset"}
- addUserKnob {41 c_gain l "C Gain" T "BlinkScript_OKLCHGrade.OKLCHGrade_C Gain"}
- addUserKnob {41 c_offset l "C Offset" T "BlinkScript_OKLCHGrade.OKLCHGrade_C Offset"}
- addUserKnob {26 "" +STARTLINE}
- addUserKnob {41 hue_shift_deg l "Hue Shift (deg)" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift (deg)"}
- addUserKnob {41 hue_chroma_threshold l "Hue Chroma Threshold" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Chroma Threshold"}
- addUserKnob {26 "" +STARTLINE}
- addUserKnob {26 hue_bands_divider l "" +STARTLINE T "Hue Band Selectors — each slider shifts only pixels in that colour range.\nBands use a 60° cosine window so neighbours blend smoothly.\nShifts fade to zero for achromatic pixels (see Hue Chroma Threshold).\n\nApproximate OKLCH hue anchors:\n  Red      ~   0° / 360°\n  Yellow   ~  85°\n  Green    ~ 145°\n  Cyan     ~ 195°\n  Blue     ~ 265°\n  Magenta  ~ 325°"}
- addUserKnob {41 hue_shift_red l "Hue Shift Red" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Red"}
- addUserKnob {41 hue_shift_yellow l "Hue Shift Yellow" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Yellow"}
- addUserKnob {41 hue_shift_green l "Hue Shift Green" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Green"}
- addUserKnob {41 hue_shift_cyan l "Hue Shift Cyan" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Cyan"}
- addUserKnob {41 hue_shift_blue l "Hue Shift Blue" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Blue"}
- addUserKnob {41 hue_shift_magenta l "Hue Shift Magenta" T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Magenta"}
- addUserKnob {26 "" +STARTLINE}
- addUserKnob {41 mix l Mix T BlinkScript_OKLCHGrade.OKLCHGrade_Mix}
- addUserKnob {41 clamp_output l "Clamp Output" T "BlinkScript_OKLCHGrade.OKLCHGrade_Clamp Output"}
- addUserKnob {41 bypass l Bypass T BlinkScript_OKLCHGrade.OKLCHGrade_Bypass}
- addUserKnob {41 debug_mode l "Debug Mode" T "BlinkScript_OKLCHGrade.OKLCHGrade_Debug Mode"}
+ addUserKnob {26 spacer_5 l "" +STARTLINE}
+ addUserKnob {26 info_label l "" +STARTLINE T "<b>Reference Anchors</b>"}
+ addUserKnob {26 hue_info l "" +STARTLINE T "R: 0° | Y: 85° | G: 145° | C: 195° | B: 265° | M: 325°"}
+
 }
+
  Input {
   inputs 0
   name Input1
