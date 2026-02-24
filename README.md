@@ -8,6 +8,9 @@ A Nuke gizmo + Blink kernel that performs grading in OKLCH while converting from
   - Blink kernel implementing linear-sRGB <-> OKLab/OKLCH conversion and grade controls.
 - `src/gizmos/OKLCH_Grade.gizmo`
   - Group/gizmo wrapper with input/output colorspace dropdowns and user controls.
+- `tools/oklch_grade_init.py`
+  - Archived initialization helper kept for rebuilding/regenerating the gizmo authoring workflow.
+  - Not used by runtime startup/menu loading.
 - `research/`
   - Source-backed notes for Blink syntax, OCIO wiring, and OKLCH math constants.
 - `tests/oklch_reference_test_vectors.md`
