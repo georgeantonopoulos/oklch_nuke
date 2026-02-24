@@ -412,3 +412,29 @@ def handle_knob_changed(node: nuke.Node, changed_knob) -> None:
         return
     if not _is_oklch_group_node(node):
         return
+
+
+def initialize_this_node() -> None:
+    """Safe onCreate entrypoint used directly from the gizmo callback."""
+    try:
+        node = nuke.thisNode()
+        initialize_node(node)
+    except Exception as exc:
+        try:
+            node = nuke.thisNode()
+            k = node.knob("status_text") if node else None
+            if k is not None:
+                k.setValue(f"Init callback error: {exc}")
+        except Exception:
+            pass
+
+
+def handle_this_knob_changed() -> None:
+    """Safe knobChanged entrypoint used directly from the gizmo callback."""
+    try:
+        node = nuke.thisNode()
+        knob = nuke.thisKnob()
+        handle_knob_changed(node, knob)
+    except Exception:
+        # Keep knobChanged silent, but never break the node panel.
+        pass
