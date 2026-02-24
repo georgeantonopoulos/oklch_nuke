@@ -18,7 +18,7 @@ A Nuke gizmo + Blink kernel that performs grading in OKLCH while converting from
 
 ## Node architecture
 
-`Input` -> `OCIOColorSpace_IN` -> `BlinkScript_OKLCHGrade` -> `OCIOColorSpace_OUT` -> `Output`
+`Input` -> `OCIOColorSpace_IN` (to detected linear-sRGB working space) -> `BlinkScript_OKLCHGrade` -> `OCIOColorSpace_OUT` (back to output space) -> `Output`
 
 ## Controls
 
@@ -28,9 +28,13 @@ Public controls on the gizmo:
 - `output_colorspace`
 - `l_gain`
 - `l_offset`
+- `l_contrast`
+- `l_pivot`
 - `c_gain`
 - `c_offset`
-- `hue_shift_deg`
+- `hue_target_deg`
+- `hue_target_shift`
+- `hue_target_falloff_deg`
 - `mix`
 - `clamp_output`
 - `bypass`

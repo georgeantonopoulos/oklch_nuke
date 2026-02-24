@@ -32,6 +32,8 @@ _GRADE_LINK_DEFS = (
     # --- Lightness & Chroma ---
     ("l_gain",               "L Gain",               "BlinkScript_OKLCHGrade.OKLCHGrade_L Gain"),
     ("l_offset",             "L Offset",             "BlinkScript_OKLCHGrade.OKLCHGrade_L Offset"),
+    ("l_contrast",           "L Contrast",           "BlinkScript_OKLCHGrade.OKLCHGrade_L Contrast"),
+    ("l_pivot",              "L Pivot",              "BlinkScript_OKLCHGrade.OKLCHGrade_L Pivot"),
     ("c_gain",               "C Gain",               "BlinkScript_OKLCHGrade.OKLCHGrade_C Gain"),
     ("c_offset",             "C Offset",             "BlinkScript_OKLCHGrade.OKLCHGrade_C Offset"),
     ("",                     "",                     None),  # ── divider ──
@@ -47,6 +49,9 @@ _GRADE_LINK_DEFS = (
     ("hue_shift_cyan",       "Hue Shift Cyan",       "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Cyan"),
     ("hue_shift_blue",       "Hue Shift Blue",       "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Blue"),
     ("hue_shift_magenta",    "Hue Shift Magenta",    "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Magenta"),
+    ("hue_target_deg",       "Hue Target (deg)",      "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Target (deg)"),
+    ("hue_target_shift",     "Hue Target Shift",      "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Target Shift"),
+    ("hue_target_falloff_deg", "Hue Target Falloff",   "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Target Falloff"),
     ("",                     "",                     None),  # ── divider ──
     # --- Utilities ---
     ("mix",                  "Mix",                  "BlinkScript_OKLCHGrade.OKLCHGrade_Mix"),
@@ -63,6 +68,8 @@ _PARAM_RANGES = {
     # Lightness
     "OKLCHGrade_L Gain":               (0.0,    3.0),
     "OKLCHGrade_L Offset":             (-1.0,   1.0),
+    "OKLCHGrade_L Contrast":           (0.0,    3.0),
+    "OKLCHGrade_L Pivot":              (0.0,    1.0),
     # Chroma
     "OKLCHGrade_C Gain":               (0.0,    2.0),
     "OKLCHGrade_C Offset":             (-0.5,   0.5),
@@ -79,6 +86,9 @@ _PARAM_RANGES = {
     "OKLCHGrade_Hue Shift Cyan":       (-180.0, 180.0),
     "OKLCHGrade_Hue Shift Blue":       (-180.0, 180.0),
     "OKLCHGrade_Hue Shift Magenta":    (-180.0, 180.0),
+    "OKLCHGrade_Hue Target (deg)":      (0.0,    360.0),
+    "OKLCHGrade_Hue Target Shift":      (-180.0, 180.0),
+    "OKLCHGrade_Hue Target Falloff":    (1.0,    180.0),
     # Utilities
     "OKLCHGrade_Mix":                  (0.0,    1.0),
 }
