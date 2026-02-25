@@ -368,43 +368,30 @@ def _add_link_knobs(group_node: nuke.Node) -> None:
 
 
 def _setup_working_space(group_node: nuke.Node) -> None:
-    """Detect the linear-sRGB working space and wire the OCIO bridge nodes.
+    """Wire internal OCIO bridge to a fixed scene-linear working space.
 
-    Sets OCIOColorSpace_IN.out_colorspace and OCIOColorSpace_OUT.in_colorspace
-    to the detected alias.  Disables all three internal processing nodes and
-    force-sets bypass if no linear-sRGB alias exists in the active OCIO config.
+    The public gizmo knobs remain linked to:
+    - OCIOColorSpace_IN.in_colorspace
+    - OCIOColorSpace_OUT.out_colorspace
+
+    Internal bridge knobs are deterministic and do not depend on parent
+    expressions:
+    - OCIOColorSpace_IN.out_colorspace = scene_linear
+    - OCIOColorSpace_OUT.in_colorspace = scene_linear
     """
-    colorspaces = get_ocio_colorspaces()
-    linear_space = detect_linear_srgb_space(colorspaces)
-
-    # Force internal bridge to linear-sRGB
-    ocio_in  = group_node.node("OCIOColorSpace_IN")
+    fixed_space = "scene_linear"
+    ocio_in = group_node.node("OCIOColorSpace_IN")
     ocio_out = group_node.node("OCIOColorSpace_OUT")
-    
-    if linear_space:
-        if ocio_in:
-            ocio_in["out_colorspace"].setValue(linear_space)
-        if ocio_out:
-            ocio_out["in_colorspace"].setValue(linear_space)
-        
-        wk = _knob(group_node, "working_linear_srgb_space")
-        if wk:
-            wk.setValue(linear_space)
-        _set_text(group_node, "status_text", f"Ready. Working space: {linear_space}")
-    else:
-        # Keep bridge nodes valid even when no linear-sRGB alias exists.
-        fallback_space = "scene_linear"
-        if ocio_in:
-            ocio_in["out_colorspace"].setValue(fallback_space)
-        if ocio_out:
-            ocio_out["in_colorspace"].setValue(fallback_space)
-        wk = _knob(group_node, "working_linear_srgb_space")
-        if wk:
-            wk.setValue(fallback_space)
-        _set_text(
-            group_node, "status_text",
-            f"Note: no linear-sRGB alias found. Falling back to {fallback_space}.",
-        )
+
+    if ocio_in:
+        ocio_in["out_colorspace"].setValue(fixed_space)
+    if ocio_out:
+        ocio_out["in_colorspace"].setValue(fixed_space)
+
+    wk = _knob(group_node, "working_linear_srgb_space")
+    if wk:
+        wk.setValue(fixed_space)
+    _set_text(group_node, "status_text", f"Ready. Working space: {fixed_space}")
 
 
 
