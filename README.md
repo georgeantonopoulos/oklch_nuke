@@ -18,7 +18,7 @@ A Nuke gizmo + Blink kernel that performs grading in OKLCH while converting from
 
 ## Node architecture
 
-`Input` -> `OCIOColorSpace_IN` -> `BlinkScript_OKLCHGrade` -> `OCIOColorSpace_OUT` -> `Output`
+`Input` -> `OCIOColorSpace_IN` (to detected linear-sRGB working space) -> `BlinkScript_OKLCHGrade` -> `OCIOColorSpace_OUT` (back to output space) -> `Output`
 
 ## Controls
 
@@ -28,36 +28,61 @@ Public controls on the gizmo:
 - `output_colorspace`
 - `l_gain`
 - `l_offset`
+- `l_contrast`
+- `l_pivot`
 - `c_gain`
 - `c_offset`
 - `hue_shift_deg`
+- `hue_chroma_threshold`
+- `hue_shift_red`
+- `hue_shift_yellow`
+- `hue_shift_green`
+- `hue_shift_cyan`
+- `hue_shift_blue`
+- `hue_shift_magenta`
+- `hue_target_deg`
+- `hue_target_shift`
+- `hue_target_falloff_deg`
 - `mix`
 - `clamp_output`
 - `bypass`
 
 ## Internal working-space behavior
 
-The baked gizmo contains a compiled BlinkScript kernel and pre-linked controls.
+The gizmo stores baked Blink metadata (`isBaked true`) while keeping the inline `kernelSource` embedded in the node.
 Menu scripts only register plugin paths and add the gizmo creation command.
 
 ## Installation
 
-1. Add either of these to `NUKE_PATH`:
-   - `/Users/georgeantonopoulos/Dev/oklch_nuke` (recommended), or
-   - `/Users/georgeantonopoulos/Dev/oklch_nuke/src`
-2. Restart Nuke.
-3. Nuke startup hooks used by this repo:
-   - `init.py` for non-UI bootstrap (plugin paths)
-   - `menu.py` for UI registration (single gizmo menu command)
-4. The UI hook adds:
-   - `Nodes > Color > OKLCH > OKLCH Grade`
-   - icon: `oklch_grade.png`
-5. Create `OKLCH_Grade` from that menu or tab search.
+There are two ways to install this gizmo.
 
-Example `NUKE_PATH` setup (repo-root form):
+### Option A: `init.py` (Recommended)
 
-- macOS/Linux: `export NUKE_PATH=\"/Users/georgeantonopoulos/Dev/oklch_nuke:$NUKE_PATH\"`
-- Windows: `set NUKE_PATH=C:\\path\\to\\oklch_nuke;%NUKE_PATH%`
+1. Clone or download this repository.
+2. In your `~/.nuke/init.py` file, add the following line:
+
+   ```python
+   nuke.pluginAddPath('/path/to/oklch_nuke')
+   ```
+
+   *(Ensure you replace `/path/to/oklch_nuke` with the actual path to the cloned repository)*
+3. Restart Nuke.
+
+### Option B: `NUKE_PATH` Environment Variable
+
+1. Clone or download this repository.
+2. Add the repository folder to your `NUKE_PATH` environment variable.
+   - **macOS/Linux**: `export NUKE_PATH="/path/to/oklch_nuke:$NUKE_PATH"`
+   - **Windows**: `set NUKE_PATH=C:\path\to\oklch_nuke;%NUKE_PATH%`
+3. Restart Nuke.
+
+### Verification
+
+Once installed and Nuke is restarted, you can access the tool from the Nuke toolbar at:
+`Nodes > Color > OKLCH > OKLCH Grade`
+*(Icon: `oklch_grade.png`)*
+
+You can also create the node using the standard Nuke node search (Tab) and typing `OKLCH_Grade`.
 
 ## Quick diagnostics in Nuke Script Editor
 

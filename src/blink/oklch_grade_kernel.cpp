@@ -6,6 +6,8 @@ param:
   // --- Lightness ---
   float l_gain;
   float l_offset;
+  float l_contrast;
+  float l_pivot;
 
   // --- Chroma ---
   float c_gain;
@@ -40,6 +42,11 @@ param:
   float hue_shift_blue;
   float hue_shift_magenta;
 
+  // --- Target Hue Correction ---
+  float hue_target_deg;
+  float hue_target_shift;
+  float hue_target_falloff_deg;
+
   // --- Utilities ---
   float mix;
   bool clamp_output;
@@ -49,6 +56,8 @@ param:
   void define() {
     defineParam(l_gain, "L Gain", 1.0f);
     defineParam(l_offset, "L Offset", 0.0f);
+    defineParam(l_contrast, "L Contrast", 1.0f);
+    defineParam(l_pivot, "L Pivot", 0.18f);
     defineParam(c_gain, "C Gain", 1.0f);
     defineParam(c_offset, "C Offset", 0.0f);
 
@@ -61,6 +70,10 @@ param:
     defineParam(hue_shift_cyan, "Hue Shift Cyan", 0.0f);
     defineParam(hue_shift_blue, "Hue Shift Blue", 0.0f);
     defineParam(hue_shift_magenta, "Hue Shift Magenta", 0.0f);
+
+    defineParam(hue_target_deg, "Hue Target (deg)", 0.0f);
+    defineParam(hue_target_shift, "Hue Target Shift", 0.0f);
+    defineParam(hue_target_falloff_deg, "Hue Target Falloff", 25.0f);
 
     defineParam(mix, "Mix", 1.0f);
     defineParam(clamp_output, "Clamp Output", false);
@@ -231,6 +244,9 @@ param:
 
     // --- Grade L and C ---
     float graded_L = (current_lch.x * l_gain) + l_offset;
+    float safe_pivot = max(l_pivot, 0.0f);
+    float safe_contrast = max(l_contrast, 0.0f);
+    graded_L = ((graded_L - safe_pivot) * safe_contrast) + safe_pivot;
     float graded_C = (current_lch.y * c_gain) + c_offset;
 
     if (graded_L < 0.0f)
@@ -273,6 +289,13 @@ param:
     // 360
     total_hue_shift +=
         hue_shift_red * hue_band_weight(orig_H, 360.0f, half) * chroma_weight;
+
+    // Optional precise hue correction around a user-picked target hue.
+    float safe_target_falloff = max(hue_target_falloff_deg, 0.1f);
+    float target_weight =
+        hue_band_weight(orig_H, wrap_hue_deg(hue_target_deg), safe_target_falloff) *
+        chroma_weight;
+    total_hue_shift += hue_target_shift * target_weight;
 
     float graded_H = wrap_hue_deg(orig_H + total_hue_shift);
 

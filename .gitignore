@@ -27,3 +27,4 @@ dist/
 # Local-only project docs/scripts
 CLAUDE.md
 deploy.sh
+screenrec/oklch_grade_v001.mp4
