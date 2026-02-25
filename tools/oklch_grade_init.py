@@ -392,9 +392,18 @@ def _setup_working_space(group_node: nuke.Node) -> None:
             wk.setValue(linear_space)
         _set_text(group_node, "status_text", f"Ready. Working space: {linear_space}")
     else:
+        # Keep bridge nodes valid even when no linear-sRGB alias exists.
+        fallback_space = "scene_linear"
+        if ocio_in:
+            ocio_in["out_colorspace"].setValue(fallback_space)
+        if ocio_out:
+            ocio_out["in_colorspace"].setValue(fallback_space)
+        wk = _knob(group_node, "working_linear_srgb_space")
+        if wk:
+            wk.setValue(fallback_space)
         _set_text(
             group_node, "status_text",
-            "Note: no linear-sRGB alias found. Using default (check OCIO nodes).",
+            f"Note: no linear-sRGB alias found. Falling back to {fallback_space}.",
         )
 
 

@@ -32,6 +32,14 @@ Public controls on the gizmo:
 - `l_pivot`
 - `c_gain`
 - `c_offset`
+- `hue_shift_deg`
+- `hue_chroma_threshold`
+- `hue_shift_red`
+- `hue_shift_yellow`
+- `hue_shift_green`
+- `hue_shift_cyan`
+- `hue_shift_blue`
+- `hue_shift_magenta`
 - `hue_target_deg`
 - `hue_target_shift`
 - `hue_target_falloff_deg`
@@ -41,7 +49,7 @@ Public controls on the gizmo:
 
 ## Internal working-space behavior
 
-The baked gizmo contains a compiled BlinkScript kernel and pre-linked controls.
+The gizmo compiles the BlinkScript kernel from inline `kernelSource` at instantiation time (`isBaked false`) and exposes pre-linked controls.
 Menu scripts only register plugin paths and add the gizmo creation command.
 
 ## Installation
