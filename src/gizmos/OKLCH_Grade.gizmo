@@ -3,7 +3,6 @@ version 16.0 v2
 Gizmo {
  help "<b>OKLCH Grade</b>\nPerceptually uniform color grading with intuitive Lightness, Chroma, and Hue controls."
  onCreate "import oklch_grade_callbacks as _okcb\n_okcb.initialize_this_node()"
- knobChanged "import oklch_grade_callbacks as _okcb\n_okcb.handle_this_knob_changed()"
  tile_color 0x3e5f9fff
  addUserKnob {20 OKLCHGrade l "OKLCH Grade"}
  addUserKnob {26 status_text l "" +STARTLINE T "<font color='#777777'><small><b>Status:</b> Note: no linear-sRGB alias found. Falling back to scene_linear.</small></font>"}
