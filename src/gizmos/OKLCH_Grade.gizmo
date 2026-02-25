@@ -62,7 +62,7 @@ Gizmo {
  }
  OCIOColorSpace {
   in_colorspace scene_linear
-  out_colorspace scene_linear
+  out_colorspace color_picking
   name OCIOColorSpace_IN
   xpos -100
   ypos -210
@@ -79,7 +79,7 @@ Gizmo {
   ypos -151
  }
  OCIOColorSpace {
-  in_colorspace scene_linear
+  in_colorspace color_picking
   out_colorspace scene_linear
   name OCIOColorSpace_OUT
   xpos -100
