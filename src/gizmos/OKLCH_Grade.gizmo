@@ -2,7 +2,7 @@
 version 16.0 v2
 Gizmo {
  help "<b>OKLCH Grade</b>\nPerceptually uniform color grading with intuitive Lightness, Chroma, and Hue controls."
- onCreate "import nuke\nn = nuke.thisNode()\nb = n.node('BlinkScript_OKLCHGrade') if n else None\npublic_ranges = [('l_gain', 0.0, 3.0), ('l_offset', -1.0, 1.0), ('l_contrast', 0.0, 3.0), ('l_pivot', 0.0, 1.0), ('c_gain', 0.0, 2.0), ('c_offset', -0.5, 0.5), ('hue_shift_deg', -360.0, 360.0), ('hue_chroma_threshold', 0.0, 0.2), ('hue_shift_red', -180.0, 180.0), ('hue_shift_yellow', -180.0, 180.0), ('hue_shift_green', -180.0, 180.0), ('hue_shift_cyan', -180.0, 180.0), ('hue_shift_blue', -180.0, 180.0), ('hue_shift_magenta', -180.0, 180.0), ('hue_target_deg', 0.0, 360.0), ('hue_target_shift', -180.0, 180.0), ('hue_target_falloff_deg', 1.0, 180.0), ('mix', 0.0, 1.0)]\nfor name, lo, hi in public_ranges:\n    k = n.knob(name)\n    if k is not None:\n        k.setRange(lo, hi)\nif b is not None:\n    blink_ranges = [('OKLCHGrade_L Gain', 0.0, 3.0), ('OKLCHGrade_L Offset', -1.0, 1.0), ('OKLCHGrade_L Contrast', 0.0, 3.0), ('OKLCHGrade_L Pivot', 0.0, 1.0), ('OKLCHGrade_C Gain', 0.0, 2.0), ('OKLCHGrade_C Offset', -0.5, 0.5), ('OKLCHGrade_Hue Shift (deg)', -360.0, 360.0), ('OKLCHGrade_Hue Chroma Threshold', 0.0, 0.2), ('OKLCHGrade_Hue Shift Red', -180.0, 180.0), ('OKLCHGrade_Hue Shift Yellow', -180.0, 180.0), ('OKLCHGrade_Hue Shift Green', -180.0, 180.0), ('OKLCHGrade_Hue Shift Cyan', -180.0, 180.0), ('OKLCHGrade_Hue Shift Blue', -180.0, 180.0), ('OKLCHGrade_Hue Shift Magenta', -180.0, 180.0), ('OKLCHGrade_Hue Target (deg)', 0.0, 360.0), ('OKLCHGrade_Hue Target Shift', -180.0, 180.0), ('OKLCHGrade_Hue Target Falloff', 1.0, 180.0), ('OKLCHGrade_Mix', 0.0, 1.0)]\n    for name, lo, hi in blink_ranges:\n        k = b.knob(name)\n        if k is not None:\n            k.setRange(lo, hi)\nspaces = nuke.getOcioColorSpaces() or []\naliases = ['Utility - Linear - sRGB', 'lin_srgb', 'Linear sRGB', 'srgb_linear']\nworking = ''\nfor name in aliases:\n    if name in spaces:\n        working = name\n        break\nif not working:\n    lowered = {v.lower(): v for v in spaces}\n    for name in aliases:\n        if name.lower() in lowered:\n            working = lowered[name.lower()]\n            break\nif not working:\n    for v in spaces:\n        low = v.lower()\n        if 'linear' in low and 'srgb' in low:\n            working = v\n            break\nstatus = "<font color='#777777'><small><b>Status:</b> Note: no linear-sRGB alias found. Falling back to scene_linear.</small></font>"\nif working:\n    wk = n.knob('working_linear_srgb_space')\n    if wk is not None:\n        wk.setValue(working)\n    status = "<font color='#66AA66'><small><b>Status:</b> OK (working space: %s)</small></font>" % working.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')\nif n.knob('status_text') is not None:\n    n.knob('status_text').setValue(status)"
+ onCreate "import nuke\nn = nuke.thisNode()\nb = n.node('BlinkScript_OKLCHGrade') if n else None\npublic_ranges = [('l_gain', 0.0, 3.0), ('l_offset', -1.0, 1.0), ('l_contrast', 0.0, 3.0), ('l_pivot', 0.0, 1.0), ('c_gain', 0.0, 2.0), ('c_offset', -0.5, 0.5), ('hue_shift_deg', -360.0, 360.0), ('hue_chroma_threshold', 0.0, 0.2), ('hue_shift_red', -180.0, 180.0), ('hue_shift_yellow', -180.0, 180.0), ('hue_shift_green', -180.0, 180.0), ('hue_shift_cyan', -180.0, 180.0), ('hue_shift_blue', -180.0, 180.0), ('hue_shift_magenta', -180.0, 180.0), ('hue_target_deg', 0.0, 360.0), ('hue_target_shift', -180.0, 180.0), ('hue_target_falloff_deg', 1.0, 180.0), ('mix', 0.0, 1.0)]\nfor name, lo, hi in public_ranges:\n    k = n.knob(name)\n    if k is not None:\n        k.setRange(lo, hi)\nif b is not None:\n    recompile = b.knob('recompile')\n    if recompile is not None:\n        try:\n            recompile.execute()\n        except Exception:\n            pass\n    blink_ranges = [('l_gain', 0.0, 3.0), ('l_offset', -1.0, 1.0), ('l_contrast', 0.0, 3.0), ('l_pivot', 0.0, 1.0), ('c_gain', 0.0, 2.0), ('c_offset', -0.5, 0.5), ('hue_shift_deg', -360.0, 360.0), ('hue_chroma_threshold', 0.0, 0.2), ('hue_shift_red', -180.0, 180.0), ('hue_shift_yellow', -180.0, 180.0), ('hue_shift_green', -180.0, 180.0), ('hue_shift_cyan', -180.0, 180.0), ('hue_shift_blue', -180.0, 180.0), ('hue_shift_magenta', -180.0, 180.0), ('hue_target_deg', 0.0, 360.0), ('hue_target_shift', -180.0, 180.0), ('hue_target_falloff_deg', 1.0, 180.0), ('mix', 0.0, 1.0)]\n    for name, lo, hi in blink_ranges:\n        k = b.knob(name)\n        if k is not None:\n            k.setRange(lo, hi)\nspaces = nuke.getOcioColorSpaces() or []\naliases = ['Utility - Linear - sRGB', 'lin_srgb', 'Linear sRGB', 'srgb_linear']\nworking = ''\nfor name in aliases:\n    if name in spaces:\n        working = name\n        break\nif not working:\n    lowered = {v.lower(): v for v in spaces}\n    for name in aliases:\n        if name.lower() in lowered:\n            working = lowered[name.lower()]\n            break\nif not working:\n    for v in spaces:\n        low = v.lower()\n        if 'linear' in low and 'srgb' in low:\n            working = v\n            break\nstatus = "<font color='#777777'><small><b>Status:</b> Note: no linear-sRGB alias found. Falling back to scene_linear.</small></font>"\nif working:\n    wk = n.knob('working_linear_srgb_space')\n    if wk is not None:\n        wk.setValue(working)\n    status = "<font color='#66AA66'><small><b>Status:</b> OK (working space: %s)</small></font>" % working.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')\nif n.knob('status_text') is not None:\n    n.knob('status_text').setValue(status)"
  tile_color 0x3e5f9fff
  addUserKnob {20 OKLCHGrade l "OKLCH Grade"}
  addUserKnob {26 status_text l "" +STARTLINE T "<font color='#777777'><small><b>Status:</b> Note: no linear-sRGB alias found. Falling back to scene_linear.</small></font>"}
@@ -12,42 +12,42 @@ Gizmo {
  addUserKnob {20 colorspace_group_end n -1}
  addUserKnob {26 "" +STARTLINE}
  addUserKnob {20 grade_group l "Lightness & Chroma" n 1}
- addUserKnob {41 l_gain l "L Gain" R 0 3 T "BlinkScript_OKLCHGrade.OKLCHGrade_L Gain"}
- addUserKnob {41 l_offset l "L Offset" R -1 1 T "BlinkScript_OKLCHGrade.OKLCHGrade_L Offset"}
- addUserKnob {41 l_contrast l "L Contrast" R 0 3 T "BlinkScript_OKLCHGrade.OKLCHGrade_L Contrast"}
- addUserKnob {41 l_pivot l "L Pivot" R 0 1 T "BlinkScript_OKLCHGrade.OKLCHGrade_L Pivot"}
- addUserKnob {41 c_gain l "C Gain" R 0 2 T "BlinkScript_OKLCHGrade.OKLCHGrade_C Gain"}
- addUserKnob {41 c_offset l "C Offset" R -0.5 0.5 T "BlinkScript_OKLCHGrade.OKLCHGrade_C Offset"}
+ addUserKnob {41 l_gain l "L Gain" R 0 3 T "BlinkScript_OKLCHGrade.l_gain"}
+ addUserKnob {41 l_offset l "L Offset" R -1 1 T "BlinkScript_OKLCHGrade.l_offset"}
+ addUserKnob {41 l_contrast l "L Contrast" R 0 3 T "BlinkScript_OKLCHGrade.l_contrast"}
+ addUserKnob {41 l_pivot l "L Pivot" R 0 1 T "BlinkScript_OKLCHGrade.l_pivot"}
+ addUserKnob {41 c_gain l "C Gain" R 0 2 T "BlinkScript_OKLCHGrade.c_gain"}
+ addUserKnob {41 c_offset l "C Offset" R -0.5 0.5 T "BlinkScript_OKLCHGrade.c_offset"}
  addUserKnob {20 grade_group_end n -1}
  addUserKnob {26 "" +STARTLINE}
  addUserKnob {20 hue_group l Hue n 1}
- addUserKnob {41 hue_shift_deg l "Hue Shift (deg)" R -360 360 T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift (deg)"}
- addUserKnob {41 hue_chroma_threshold l "Hue Chroma Threshold" R 0 0.2 T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Chroma Threshold"}
+ addUserKnob {41 hue_shift_deg l "Hue Shift (deg)" R -360 360 T "BlinkScript_OKLCHGrade.hue_shift_deg"}
+ addUserKnob {41 hue_chroma_threshold l "Hue Chroma Threshold" R 0 0.2 T "BlinkScript_OKLCHGrade.hue_chroma_threshold"}
  addUserKnob {26 "" +STARTLINE}
  addUserKnob {26 hue_bands_label l "" +STARTLINE T "<b>Hue Band Selectors</b> <small>(85° Cosine Window)</small>"}
  addUserKnob {26 dot_red l "<font color='#FF6666'>●</font>" +STARTLINE T ""}
- addUserKnob {41 hue_shift_red l "Hue Shift Red" R -180 180 -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Red"}
+ addUserKnob {41 hue_shift_red l "Hue Shift Red" R -180 180 -STARTLINE T "BlinkScript_OKLCHGrade.hue_shift_red"}
  addUserKnob {26 dot_yellow l "<font color='#EEEE66'>●</font>" +STARTLINE T ""}
- addUserKnob {41 hue_shift_yellow l "Hue Shift Yellow" R -180 180 -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Yellow"}
+ addUserKnob {41 hue_shift_yellow l "Hue Shift Yellow" R -180 180 -STARTLINE T "BlinkScript_OKLCHGrade.hue_shift_yellow"}
  addUserKnob {26 dot_green l "<font color='#66FF66'>●</font>" +STARTLINE T ""}
- addUserKnob {41 hue_shift_green l "Hue Shift Green" R -180 180 -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Green"}
+ addUserKnob {41 hue_shift_green l "Hue Shift Green" R -180 180 -STARTLINE T "BlinkScript_OKLCHGrade.hue_shift_green"}
  addUserKnob {26 dot_cyan l "<font color='#66FFFF'>●</font>" +STARTLINE T ""}
- addUserKnob {41 hue_shift_cyan l "Hue Shift Cyan" R -180 180 -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Cyan"}
+ addUserKnob {41 hue_shift_cyan l "Hue Shift Cyan" R -180 180 -STARTLINE T "BlinkScript_OKLCHGrade.hue_shift_cyan"}
  addUserKnob {26 dot_blue l "<font color='#6666FF'>●</font>" +STARTLINE T ""}
- addUserKnob {41 hue_shift_blue l "Hue Shift Blue" R -180 180 -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Blue"}
+ addUserKnob {41 hue_shift_blue l "Hue Shift Blue" R -180 180 -STARTLINE T "BlinkScript_OKLCHGrade.hue_shift_blue"}
  addUserKnob {26 dot_magenta l "<font color='#FF66FF'>●</font>" +STARTLINE T ""}
- addUserKnob {41 hue_shift_magenta l "Hue Shift Magenta" R -180 180 -STARTLINE T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Magenta"}
+ addUserKnob {41 hue_shift_magenta l "Hue Shift Magenta" R -180 180 -STARTLINE T "BlinkScript_OKLCHGrade.hue_shift_magenta"}
  addUserKnob {26 "" +STARTLINE}
- addUserKnob {41 hue_target_deg l "Hue Target (deg)" R 0 360 T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Target (deg)"}
- addUserKnob {41 hue_target_shift l "Hue Target Shift" R -180 180 T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Target Shift"}
- addUserKnob {41 hue_target_falloff_deg l "Hue Target Falloff" R 1 180 T "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Target Falloff"}
+ addUserKnob {41 hue_target_deg l "Hue Target (deg)" R 0 360 T "BlinkScript_OKLCHGrade.hue_target_deg"}
+ addUserKnob {41 hue_target_shift l "Hue Target Shift" R -180 180 T "BlinkScript_OKLCHGrade.hue_target_shift"}
+ addUserKnob {41 hue_target_falloff_deg l "Hue Target Falloff" R 1 180 T "BlinkScript_OKLCHGrade.hue_target_falloff_deg"}
  addUserKnob {20 hue_group_end n -1}
  addUserKnob {26 "" +STARTLINE}
- addUserKnob {41 mix l Mix R 0 1 T BlinkScript_OKLCHGrade.OKLCHGrade_Mix}
- addUserKnob {41 clamp_output l "Clamp Output" T "BlinkScript_OKLCHGrade.OKLCHGrade_Clamp Output"}
+ addUserKnob {41 mix l Mix R 0 1 T BlinkScript_OKLCHGrade.mix}
+ addUserKnob {41 clamp_output l "Clamp Output" T "BlinkScript_OKLCHGrade.clamp_output"}
  addUserKnob {20 advanced_tab l Advanced}
- addUserKnob {41 bypass l Bypass T BlinkScript_OKLCHGrade.OKLCHGrade_Bypass}
- addUserKnob {41 debug_mode l "Debug Mode" T "BlinkScript_OKLCHGrade.OKLCHGrade_Debug Mode"}
+ addUserKnob {41 bypass l Bypass T BlinkScript_OKLCHGrade.bypass}
+ addUserKnob {41 debug_mode l "Debug Mode" T "BlinkScript_OKLCHGrade.debug_mode"}
  addUserKnob {1 working_linear_srgb_space l "Working Linear sRGB" +INVISIBLE T scene_linear}
  addUserKnob {26 "" +STARTLINE}
  addUserKnob {26 info_label l "" +STARTLINE T "<b>Reference Anchors</b>"}

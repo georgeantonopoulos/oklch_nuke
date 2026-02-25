@@ -49,7 +49,7 @@ Public controls on the gizmo:
 
 ## Internal working-space behavior
 
-The gizmo compiles the BlinkScript kernel from inline `kernelSource` at instantiation time (`isBaked false`) and exposes pre-linked controls.
+The gizmo stores baked Blink metadata (`isBaked true`) while keeping the inline `kernelSource` embedded in the node.
 Menu scripts only register plugin paths and add the gizmo creation command.
 
 ## Installation

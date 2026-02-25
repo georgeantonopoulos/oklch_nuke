@@ -30,34 +30,34 @@ _NO_RERENDER = 0x0000000000004000
 #   → emits a Link_Knob pointing at the given internal knob.
 _GRADE_LINK_DEFS = (
     # --- Lightness & Chroma ---
-    ("l_gain",               "L Gain",               "BlinkScript_OKLCHGrade.OKLCHGrade_L Gain"),
-    ("l_offset",             "L Offset",             "BlinkScript_OKLCHGrade.OKLCHGrade_L Offset"),
-    ("l_contrast",           "L Contrast",           "BlinkScript_OKLCHGrade.OKLCHGrade_L Contrast"),
-    ("l_pivot",              "L Pivot",              "BlinkScript_OKLCHGrade.OKLCHGrade_L Pivot"),
-    ("c_gain",               "C Gain",               "BlinkScript_OKLCHGrade.OKLCHGrade_C Gain"),
-    ("c_offset",             "C Offset",             "BlinkScript_OKLCHGrade.OKLCHGrade_C Offset"),
+    ("l_gain",               "L Gain",               "BlinkScript_OKLCHGrade.l_gain"),
+    ("l_offset",             "L Offset",             "BlinkScript_OKLCHGrade.l_offset"),
+    ("l_contrast",           "L Contrast",           "BlinkScript_OKLCHGrade.l_contrast"),
+    ("l_pivot",              "L Pivot",              "BlinkScript_OKLCHGrade.l_pivot"),
+    ("c_gain",               "C Gain",               "BlinkScript_OKLCHGrade.c_gain"),
+    ("c_offset",             "C Offset",             "BlinkScript_OKLCHGrade.c_offset"),
     ("",                     "",                     None),  # ── divider ──
     # --- Global Hue ---
-    ("hue_shift_deg",        "Hue Shift (deg)",      "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift (deg)"),
-    ("hue_chroma_threshold", "Hue Chroma Threshold", "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Chroma Threshold"),
+    ("hue_shift_deg",        "Hue Shift (deg)",      "BlinkScript_OKLCHGrade.hue_shift_deg"),
+    ("hue_chroma_threshold", "Hue Chroma Threshold", "BlinkScript_OKLCHGrade.hue_chroma_threshold"),
     ("",                     "",                     None),  # ── divider ──
     # --- Hue Band Selectors (named content block, carries tooltip text) ---
     ("hue_bands_divider",    "",                     None),
-    ("hue_shift_red",        "Hue Shift Red",        "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Red"),
-    ("hue_shift_yellow",     "Hue Shift Yellow",     "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Yellow"),
-    ("hue_shift_green",      "Hue Shift Green",      "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Green"),
-    ("hue_shift_cyan",       "Hue Shift Cyan",       "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Cyan"),
-    ("hue_shift_blue",       "Hue Shift Blue",       "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Blue"),
-    ("hue_shift_magenta",    "Hue Shift Magenta",    "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Shift Magenta"),
-    ("hue_target_deg",       "Hue Target (deg)",      "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Target (deg)"),
-    ("hue_target_shift",     "Hue Target Shift",      "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Target Shift"),
-    ("hue_target_falloff_deg", "Hue Target Falloff",   "BlinkScript_OKLCHGrade.OKLCHGrade_Hue Target Falloff"),
+    ("hue_shift_red",        "Hue Shift Red",        "BlinkScript_OKLCHGrade.hue_shift_red"),
+    ("hue_shift_yellow",     "Hue Shift Yellow",     "BlinkScript_OKLCHGrade.hue_shift_yellow"),
+    ("hue_shift_green",      "Hue Shift Green",      "BlinkScript_OKLCHGrade.hue_shift_green"),
+    ("hue_shift_cyan",       "Hue Shift Cyan",       "BlinkScript_OKLCHGrade.hue_shift_cyan"),
+    ("hue_shift_blue",       "Hue Shift Blue",       "BlinkScript_OKLCHGrade.hue_shift_blue"),
+    ("hue_shift_magenta",    "Hue Shift Magenta",    "BlinkScript_OKLCHGrade.hue_shift_magenta"),
+    ("hue_target_deg",       "Hue Target (deg)",      "BlinkScript_OKLCHGrade.hue_target_deg"),
+    ("hue_target_shift",     "Hue Target Shift",      "BlinkScript_OKLCHGrade.hue_target_shift"),
+    ("hue_target_falloff_deg", "Hue Target Falloff",   "BlinkScript_OKLCHGrade.hue_target_falloff_deg"),
     ("",                     "",                     None),  # ── divider ──
     # --- Utilities ---
-    ("mix",                  "Mix",                  "BlinkScript_OKLCHGrade.OKLCHGrade_Mix"),
-    ("clamp_output",         "Clamp Output",         "BlinkScript_OKLCHGrade.OKLCHGrade_Clamp Output"),
-    ("bypass",               "Bypass",               "BlinkScript_OKLCHGrade.OKLCHGrade_Bypass"),
-    ("debug_mode",           "Debug Mode",           "BlinkScript_OKLCHGrade.OKLCHGrade_Debug Mode"),
+    ("mix",                  "Mix",                  "BlinkScript_OKLCHGrade.mix"),
+    ("clamp_output",         "Clamp Output",         "BlinkScript_OKLCHGrade.clamp_output"),
+    ("bypass",               "Bypass",               "BlinkScript_OKLCHGrade.bypass"),
+    ("debug_mode",           "Debug Mode",           "BlinkScript_OKLCHGrade.debug_mode"),
 )
 
 # Slider ranges for BlinkScript float params.
@@ -66,31 +66,31 @@ _GRADE_LINK_DEFS = (
 # These must be applied via setRange() after recompile.execute().
 _PARAM_RANGES = {
     # Lightness
-    "OKLCHGrade_L Gain":               (0.0,    3.0),
-    "OKLCHGrade_L Offset":             (-1.0,   1.0),
-    "OKLCHGrade_L Contrast":           (0.0,    3.0),
-    "OKLCHGrade_L Pivot":              (0.0,    1.0),
+    "l_gain":               (0.0,    3.0),
+    "l_offset":             (-1.0,   1.0),
+    "l_contrast":           (0.0,    3.0),
+    "l_pivot":              (0.0,    1.0),
     # Chroma
-    "OKLCHGrade_C Gain":               (0.0,    2.0),
-    "OKLCHGrade_C Offset":             (-0.5,   0.5),
+    "c_gain":               (0.0,    2.0),
+    "c_offset":             (-0.5,   0.5),
     # Global hue
-    "OKLCHGrade_Hue Shift (deg)":      (-360.0, 360.0),
+    "hue_shift_deg":      (-360.0, 360.0),
     # Chroma threshold: 0 = shift everything, 0.2 = aggressive grey protection.
     # OKLCH chroma for sRGB colours typically spans 0..~0.37; a threshold of
     # 0.05 protects near-neutral values while leaving saturated colours free.
-    "OKLCHGrade_Hue Chroma Threshold": (0.0,    0.2),
+    "hue_chroma_threshold": (0.0,    0.2),
     # Hue band selectors — same degree range as global shift
-    "OKLCHGrade_Hue Shift Red":        (-180.0, 180.0),
-    "OKLCHGrade_Hue Shift Yellow":     (-180.0, 180.0),
-    "OKLCHGrade_Hue Shift Green":      (-180.0, 180.0),
-    "OKLCHGrade_Hue Shift Cyan":       (-180.0, 180.0),
-    "OKLCHGrade_Hue Shift Blue":       (-180.0, 180.0),
-    "OKLCHGrade_Hue Shift Magenta":    (-180.0, 180.0),
-    "OKLCHGrade_Hue Target (deg)":      (0.0,    360.0),
-    "OKLCHGrade_Hue Target Shift":      (-180.0, 180.0),
-    "OKLCHGrade_Hue Target Falloff":    (1.0,    180.0),
+    "hue_shift_red":        (-180.0, 180.0),
+    "hue_shift_yellow":     (-180.0, 180.0),
+    "hue_shift_green":      (-180.0, 180.0),
+    "hue_shift_cyan":       (-180.0, 180.0),
+    "hue_shift_blue":       (-180.0, 180.0),
+    "hue_shift_magenta":    (-180.0, 180.0),
+    "hue_target_deg":      (0.0,    360.0),
+    "hue_target_shift":      (-180.0, 180.0),
+    "hue_target_falloff_deg":    (1.0,    180.0),
     # Utilities
-    "OKLCHGrade_Mix":                  (0.0,    1.0),
+    "mix":                  (0.0,    1.0),
 }
 
 _COLORSPACE_LINK_DEFS = (
@@ -270,7 +270,7 @@ def _load_kernel_source(group_node: nuke.Node) -> bool:
     compile_button.execute()
 
     # Check if compilation succeeded by looking for the first param knob
-    if _knob(blink, "OKLCHGrade_L Gain") is None:
+    if _knob(blink, "l_gain") is None:
         available = sorted(k for k in blink.knobs().keys() if not k.startswith("__"))
         _set_text(
             group_node, "status_text",
