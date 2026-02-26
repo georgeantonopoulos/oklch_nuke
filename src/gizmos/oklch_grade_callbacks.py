@@ -298,6 +298,17 @@ def _prepare_blink_params(node: Optional[nuke.Node], force_recompile: bool) -> t
         )
         return blink, [internal_name for _, _, internal_name, _ in _PARAM_LINKS]
 
+    # Nuke < 16: file-mode compile does not reliably materialize param knobs,
+    # and isBaked/KernelDescription from a Nuke 16 gizmo cannot be cleared at
+    # runtime.  Go straight to inline kernelSource (read .cpp, set knob value,
+    # recompile).
+    if _nuke_major_version() < 16:
+        if _set_kernel_source_inline_from_file(blink):
+            _run_recompile(blink)
+        missing = _missing_param_knobs(blink)
+        return blink, missing
+
+    # Nuke >= 16: file-mode path works reliably.
     kernel_file_changed = _set_kernel_source_file_absolute(blink)
     kernel_file_mode = _is_kernel_source_file_mode(blink, kernel_path)
     if not kernel_file_mode:
@@ -313,28 +324,11 @@ def _prepare_blink_params(node: Optional[nuke.Node], force_recompile: bool) -> t
         )
         return blink, [internal_name for _, _, internal_name, _ in _PARAM_LINKS]
 
-    legacy_changed = _apply_legacy_blink_compat(blink)
-    legacy_recompile_needed = _needs_legacy_recompile(blink)
-
-    # Required order for robust legacy startup:
-    # 1) set kernelSourceFile absolute path
-    # 2) reload file mode source
-    # 3) apply legacy compatibility flags
-    # 4) recompile
-    if kernel_file_mode and (kernel_file_changed or force_recompile):
+    if kernel_file_changed or force_recompile:
         _run_reload_kernel_source_file(blink)
-    if force_recompile or kernel_file_changed or legacy_changed or legacy_recompile_needed:
         _run_recompile(blink)
 
     missing = _missing_param_knobs(blink)
-    if not missing:
-        return blink, missing
-
-    # Fallback: for some Nuke14 setups file-mode compile does not expose params.
-    # Keep absolute kernelSourceFile populated, but compile from inline source.
-    if _set_kernel_source_inline_from_file(blink):
-        _run_recompile(blink)
-        missing = _missing_param_knobs(blink)
 
     return blink, missing
 
