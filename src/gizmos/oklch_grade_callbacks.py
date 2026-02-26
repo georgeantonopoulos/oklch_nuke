@@ -32,7 +32,7 @@ _PARAM_LINKS = (
     ("debug_mode", "Debug Mode", "debug_mode", None),
 )
 
-_KERNEL_SOURCE_RELATIVE = "blink/oklch_grade_kernel.cpp"
+_KERNEL_SOURCE_RELATIVE = os.path.join("blink", "oklch_grade_kernel.cpp")
 
 
 def _nuke_major_version() -> int:
@@ -100,7 +100,7 @@ def _run_reload_kernel_source_file(blink: Optional[nuke.Node]) -> None:
 def _find_kernel_absolute_path() -> Optional[str]:
     override = os.environ.get("OKLCH_GRADE_KERNEL_PATH", "").strip()
     if override and os.path.isfile(override):
-        return override
+        return os.path.abspath(override)
 
     here = os.path.abspath(os.path.dirname(__file__))
     # callbacks.py lives in .../gizmos, kernel is in sibling ../blink
@@ -108,11 +108,24 @@ def _find_kernel_absolute_path() -> Optional[str]:
     if os.path.isfile(candidate):
         return candidate
 
+    # Fallback for installs where plugin paths vary (repo root, src, gizmos).
+    for plugin_path in nuke.pluginPath() or []:
+        plugin_path = os.path.abspath(plugin_path)
+        candidates = (
+            os.path.join(plugin_path, _KERNEL_SOURCE_RELATIVE),
+            os.path.join(plugin_path, "..", _KERNEL_SOURCE_RELATIVE),
+            os.path.join(plugin_path, "..", "src", _KERNEL_SOURCE_RELATIVE),
+        )
+        for path in candidates:
+            path = os.path.normpath(path)
+            if os.path.isfile(path):
+                return path
+
     return None
 
 
-def _set_kernel_source_file_relative(blink: Optional[nuke.Node]) -> bool:
-    """Set kernelSourceFile in file-mode using path relative to install dir.
+def _set_kernel_source_file_absolute(blink: Optional[nuke.Node]) -> bool:
+    """Set kernelSourceFile in file-mode using absolute path.
 
     Returns True when a path was set.
     """
@@ -120,19 +133,20 @@ def _set_kernel_source_file_relative(blink: Optional[nuke.Node]) -> bool:
     if kernel_source_file is None:
         return False
 
-    if not _find_kernel_absolute_path():
+    kernel_path = _find_kernel_absolute_path()
+    if not kernel_path:
         return False
 
     try:
-        current = str(kernel_source_file.value()).replace("\\", "/")
+        current = os.path.normpath(str(kernel_source_file.value()))
     except Exception:
         current = ""
 
-    if current == _KERNEL_SOURCE_RELATIVE:
+    if current == os.path.normpath(kernel_path):
         return False
 
     try:
-        kernel_source_file.setValue(_KERNEL_SOURCE_RELATIVE)
+        kernel_source_file.setValue(kernel_path)
         return True
     except Exception:
         return False
@@ -142,11 +156,14 @@ def _is_kernel_source_file_mode(blink: Optional[nuke.Node]) -> bool:
     kernel_source_file = _knob(blink, "kernelSourceFile")
     if kernel_source_file is None:
         return False
+    kernel_path = _find_kernel_absolute_path()
+    if not kernel_path:
+        return False
     try:
-        current = str(kernel_source_file.value()).replace("\\", "/")
+        current = os.path.normpath(str(kernel_source_file.value()))
     except Exception:
         return False
-    return current == _KERNEL_SOURCE_RELATIVE
+    return current == os.path.normpath(kernel_path)
 
 
 def _apply_legacy_blink_compat(blink: Optional[nuke.Node]) -> bool:
@@ -263,7 +280,7 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
         )
         return len(_PARAM_LINKS)
 
-    kernel_file_changed = _set_kernel_source_file_relative(blink)
+    kernel_file_changed = _set_kernel_source_file_absolute(blink)
     kernel_file_mode = _is_kernel_source_file_mode(blink)
     legacy_changed = _apply_legacy_blink_compat(blink)
     legacy_recompile_needed = _needs_legacy_recompile(blink)
