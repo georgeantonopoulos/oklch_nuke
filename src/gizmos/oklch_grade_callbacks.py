@@ -61,6 +61,20 @@ def _set_status(node: Optional[nuke.Node], html: str) -> None:
         pass
 
 
+def _escape_html(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _status_value(node: Optional[nuke.Node]) -> str:
+    status = _knob(node, "status_text")
+    if status is None:
+        return ""
+    try:
+        return str(status.value())
+    except Exception:
+        return ""
+
+
 def _resolve_blink_knob_name(blink: nuke.Node, label: str, internal_name: str) -> Optional[str]:
     # Handle both Blink naming styles seen in the wild:
     # 1) Internal var name: l_gain
@@ -76,6 +90,16 @@ def _resolve_blink_knob_name(blink: nuke.Node, label: str, internal_name: str) -
     return None
 
 
+def _missing_param_knobs(blink: Optional[nuke.Node]) -> list[str]:
+    if blink is None:
+        return [internal_name for _, _, internal_name, _ in _PARAM_LINKS]
+    missing: list[str] = []
+    for _, label, internal_name, _ in _PARAM_LINKS:
+        if _resolve_blink_knob_name(blink, label, internal_name) is None:
+            missing.append(internal_name)
+    return missing
+
+
 def _run_recompile(blink: Optional[nuke.Node]) -> None:
     recompile = _knob(blink, "recompile")
     if recompile is None:
@@ -85,6 +109,28 @@ def _run_recompile(blink: Optional[nuke.Node]) -> None:
     except Exception:
         # Keep panel responsive even if compile fails.
         pass
+
+
+def _set_kernel_source_inline_from_file(blink: Optional[nuke.Node]) -> bool:
+    """Fallback for older Blink builds where file-mode may not materialize params."""
+    if blink is None:
+        return False
+    kernel_source = _knob(blink, "kernelSource")
+    if kernel_source is None:
+        return False
+    kernel_path = _find_kernel_absolute_path()
+    if not kernel_path:
+        return False
+    try:
+        with open(kernel_path, "r", encoding="utf-8") as handle:
+            source = handle.read()
+    except Exception:
+        return False
+    try:
+        kernel_source.setValue(source)
+        return True
+    except Exception:
+        return False
 
 
 def _run_reload_kernel_source_file(blink: Optional[nuke.Node]) -> None:
@@ -152,15 +198,24 @@ def _set_kernel_source_file_absolute(blink: Optional[nuke.Node]) -> bool:
         return False
 
 
-def _is_kernel_source_file_mode(blink: Optional[nuke.Node]) -> bool:
+def _kernel_source_file_value(blink: Optional[nuke.Node]) -> str:
     kernel_source_file = _knob(blink, "kernelSourceFile")
     if kernel_source_file is None:
-        return False
-    kernel_path = _find_kernel_absolute_path()
+        return ""
+    try:
+        return str(kernel_source_file.value())
+    except Exception:
+        return ""
+
+
+def _is_kernel_source_file_mode(blink: Optional[nuke.Node], kernel_path: str) -> bool:
     if not kernel_path:
         return False
+    current_raw = _kernel_source_file_value(blink)
+    if not current_raw:
+        return False
     try:
-        current = os.path.normpath(str(kernel_source_file.value()))
+        current = os.path.normpath(current_raw)
     except Exception:
         return False
     return current == os.path.normpath(kernel_path)
@@ -222,6 +277,68 @@ def _needs_legacy_recompile(blink: Optional[nuke.Node]) -> bool:
     return False
 
 
+def _prepare_blink_params(node: Optional[nuke.Node], force_recompile: bool) -> tuple[Optional[nuke.Node], list[str]]:
+    """Ensure Blink param knobs exist before linking group knobs."""
+    if node is None:
+        return None, [internal_name for _, _, internal_name, _ in _PARAM_LINKS]
+
+    blink = node.node("BlinkScript_OKLCHGrade")
+    if blink is None:
+        return None, [internal_name for _, _, internal_name, _ in _PARAM_LINKS]
+
+    kernel_path = _find_kernel_absolute_path()
+    if not kernel_path:
+        _set_status(
+            node,
+            (
+                "<font color='#cc6666'><small><b>Status:</b> "
+                "Kernel file not found. Expected oklch_grade_kernel.cpp in the install tree."
+                "</small></font>"
+            ),
+        )
+        return blink, [internal_name for _, _, internal_name, _ in _PARAM_LINKS]
+
+    kernel_file_changed = _set_kernel_source_file_absolute(blink)
+    kernel_file_mode = _is_kernel_source_file_mode(blink, kernel_path)
+    if not kernel_file_mode:
+        current = _escape_html(_kernel_source_file_value(blink) or "<empty>")
+        target = _escape_html(kernel_path)
+        _set_status(
+            node,
+            (
+                "<font color='#cc6666'><small><b>Status:</b> "
+                f"Could not set absolute kernelSourceFile. current={current} target={target}"
+                "</small></font>"
+            ),
+        )
+        return blink, [internal_name for _, _, internal_name, _ in _PARAM_LINKS]
+
+    legacy_changed = _apply_legacy_blink_compat(blink)
+    legacy_recompile_needed = _needs_legacy_recompile(blink)
+
+    # Required order for robust legacy startup:
+    # 1) set kernelSourceFile absolute path
+    # 2) reload file mode source
+    # 3) apply legacy compatibility flags
+    # 4) recompile
+    if kernel_file_mode and (kernel_file_changed or force_recompile):
+        _run_reload_kernel_source_file(blink)
+    if force_recompile or kernel_file_changed or legacy_changed or legacy_recompile_needed:
+        _run_recompile(blink)
+
+    missing = _missing_param_knobs(blink)
+    if not missing:
+        return blink, missing
+
+    # Fallback: for some Nuke14 setups file-mode compile does not expose params.
+    # Keep absolute kernelSourceFile populated, but compile from inline source.
+    if _set_kernel_source_inline_from_file(blink):
+        _run_recompile(blink)
+        missing = _missing_param_knobs(blink)
+
+    return blink, missing
+
+
 def _apply_colorspace_defaults(node: Optional[nuke.Node]) -> None:
     if node is None:
         return
@@ -272,7 +389,7 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
     if node is None:
         return 0
 
-    blink = node.node("BlinkScript_OKLCHGrade")
+    blink, missing = _prepare_blink_params(node, force_recompile=force_recompile)
     if blink is None:
         _set_status(
             node,
@@ -280,17 +397,15 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
         )
         return len(_PARAM_LINKS)
 
-    kernel_file_changed = _set_kernel_source_file_absolute(blink)
-    kernel_file_mode = _is_kernel_source_file_mode(blink)
-    legacy_changed = _apply_legacy_blink_compat(blink)
-    legacy_recompile_needed = _needs_legacy_recompile(blink)
-
-    # For compatibility and file-mode loading we must compile before linking
-    # so generated Blink parameter knobs exist.
-    if kernel_file_changed or (force_recompile and kernel_file_mode):
-        _run_reload_kernel_source_file(blink)
-    if force_recompile or kernel_file_changed or legacy_changed or legacy_recompile_needed:
-        _run_recompile(blink)
+    if missing:
+        _set_status(
+            node,
+            (
+                "<font color='#cc6666'><small><b>Status:</b> Blink kernel params missing after compile: "
+                f"{', '.join(missing[:6])}{'...' if len(missing) > 6 else ''}.</small></font>"
+            ),
+        )
+        return len(_PARAM_LINKS)
 
     unresolved = 0
     for public_name, label, internal_name, value_range in _PARAM_LINKS:
@@ -328,12 +443,15 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
 
 def initialize_this_node() -> None:
     node = nuke.thisNode()
+    _apply_colorspace_defaults(node)
     unresolved = _sync_links(node, force_recompile=True)
     if unresolved:
-        # One more pass after recompile for setups that materialize knobs lazily.
-        unresolved = _sync_links(node, force_recompile=False)
-    _apply_colorspace_defaults(node)
+        # One more forced pass for legacy setups where params appear after
+        # first compile/reload cycle.
+        unresolved = _sync_links(node, force_recompile=True)
     if unresolved:
+        if "#cc6666" in _status_value(node).lower():
+            return
         _set_status(
             node,
             (
