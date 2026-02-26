@@ -32,6 +32,13 @@ _PARAM_LINKS = (
 )
 
 
+def _nuke_major_version() -> int:
+    try:
+        return int(getattr(nuke, "NUKE_VERSION_MAJOR", 0))
+    except Exception:
+        return 0
+
+
 def _knob(node: Optional[nuke.Node], name: str):
     if node is None:
         return None
@@ -75,6 +82,34 @@ def _run_recompile(blink: Optional[nuke.Node]) -> None:
     except Exception:
         # Keep panel responsive even if compile fails.
         pass
+
+
+def _apply_legacy_blink_compat(node: Optional[nuke.Node]) -> None:
+    if node is None or _nuke_major_version() >= 16:
+        return
+
+    blink = node.node("BlinkScript_OKLCHGrade")
+    if blink is None:
+        return
+
+    for baked_name in ("isBaked", "isbaked"):
+        baked_knob = _knob(blink, baked_name)
+        if baked_knob is not None:
+            try:
+                baked_knob.setValue(False)
+            except Exception:
+                pass
+            break
+
+    for kernel_name in ("KernelDescription", "kernelDescription"):
+        kernel_desc_knob = _knob(blink, kernel_name)
+        if kernel_desc_knob is not None:
+            try:
+                # Empty value so legacy Nuke saves without embedded KernelDescription payload.
+                kernel_desc_knob.setValue("")
+            except Exception:
+                pass
+            break
 
 
 def _apply_colorspace_defaults(node: Optional[nuke.Node]) -> None:
@@ -174,6 +209,7 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
 
 def initialize_this_node() -> None:
     node = nuke.thisNode()
+    _apply_legacy_blink_compat(node)
     unresolved = _sync_links(node, force_recompile=True)
     if unresolved:
         # One more pass after recompile for setups that materialize knobs lazily.
@@ -193,6 +229,7 @@ def initialize_this_node() -> None:
 def handle_this_knob_changed() -> None:
     # Lightweight maintenance pass for script-load or delayed knob materialization.
     node = nuke.thisNode()
+    _apply_legacy_blink_compat(node)
     unresolved = _sync_links(node, force_recompile=False)
     if unresolved:
         _sync_links(node, force_recompile=True)

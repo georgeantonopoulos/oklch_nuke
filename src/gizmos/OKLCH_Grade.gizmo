@@ -1,4 +1,3 @@
-#! /opt/Nuke16.0v2/libnuke-16.0.2.so -nx
 version 16.0 v2
 Gizmo {
  help "<b>OKLCH Grade</b>\nPerceptually uniform color grading with intuitive Lightness, Chroma, and Hue controls."
