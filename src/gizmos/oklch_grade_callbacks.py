@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 import nuke
@@ -30,6 +31,8 @@ _PARAM_LINKS = (
     ("bypass", "Bypass", "bypass", None),
     ("debug_mode", "Debug Mode", "debug_mode", None),
 )
+
+_KERNEL_SOURCE_RELATIVE = "blink/oklch_grade_kernel.cpp"
 
 
 def _nuke_major_version() -> int:
@@ -84,32 +87,122 @@ def _run_recompile(blink: Optional[nuke.Node]) -> None:
         pass
 
 
-def _apply_legacy_blink_compat(node: Optional[nuke.Node]) -> None:
-    if node is None or _nuke_major_version() >= 16:
+def _run_reload_kernel_source_file(blink: Optional[nuke.Node]) -> None:
+    reload_knob = _knob(blink, "reloadKernelSourceFile")
+    if reload_knob is None:
         return
+    try:
+        reload_knob.execute()
+    except Exception:
+        pass
 
-    blink = node.node("BlinkScript_OKLCHGrade")
-    if blink is None:
-        return
+
+def _find_kernel_absolute_path() -> Optional[str]:
+    override = os.environ.get("OKLCH_GRADE_KERNEL_PATH", "").strip()
+    if override and os.path.isfile(override):
+        return override
+
+    here = os.path.abspath(os.path.dirname(__file__))
+    # callbacks.py lives in .../gizmos, kernel is in sibling ../blink
+    candidate = os.path.normpath(os.path.join(here, "..", _KERNEL_SOURCE_RELATIVE))
+    if os.path.isfile(candidate):
+        return candidate
+
+    return None
+
+
+def _set_kernel_source_file_relative(blink: Optional[nuke.Node]) -> bool:
+    """Set kernelSourceFile in file-mode using path relative to install dir.
+
+    Returns True when a path was set.
+    """
+    kernel_source_file = _knob(blink, "kernelSourceFile")
+    if kernel_source_file is None:
+        return False
+
+    if not _find_kernel_absolute_path():
+        return False
+
+    try:
+        current = str(kernel_source_file.value()).replace("\\", "/")
+    except Exception:
+        current = ""
+
+    if current == _KERNEL_SOURCE_RELATIVE:
+        return False
+
+    try:
+        kernel_source_file.setValue(_KERNEL_SOURCE_RELATIVE)
+        return True
+    except Exception:
+        return False
+
+
+def _is_kernel_source_file_mode(blink: Optional[nuke.Node]) -> bool:
+    kernel_source_file = _knob(blink, "kernelSourceFile")
+    if kernel_source_file is None:
+        return False
+    try:
+        current = str(kernel_source_file.value()).replace("\\", "/")
+    except Exception:
+        return False
+    return current == _KERNEL_SOURCE_RELATIVE
+
+
+def _apply_legacy_blink_compat(blink: Optional[nuke.Node]) -> bool:
+    """Apply pre-16 Blink compatibility. Returns True when state changed."""
+    if blink is None or _nuke_major_version() >= 16:
+        return False
+
+    changed = False
 
     for baked_name in ("isBaked", "isbaked"):
         baked_knob = _knob(blink, baked_name)
         if baked_knob is not None:
             try:
-                baked_knob.setValue(False)
+                current = bool(baked_knob.value())
             except Exception:
-                pass
+                current = True
+            if current:
+                try:
+                    baked_knob.setValue(False)
+                    changed = True
+                except Exception:
+                    pass
             break
+    for kernel_name in ("KernelDescription", "kernelDescription"):
+        kernel_desc_knob = _knob(blink, kernel_name)
+        if kernel_desc_knob is not None:
+            try:
+                current = str(kernel_desc_knob.value())
+            except Exception:
+                current = "nonempty"
+            if current:
+                try:
+                    # Empty value so legacy Nuke saves without embedded KernelDescription payload.
+                    kernel_desc_knob.setValue("")
+                    changed = True
+                except Exception:
+                    pass
+            break
+    return changed
+
+
+def _needs_legacy_recompile(blink: Optional[nuke.Node]) -> bool:
+    """True when legacy mode is active, even if no value changed this pass."""
+    if blink is None or _nuke_major_version() >= 16:
+        return False
 
     for kernel_name in ("KernelDescription", "kernelDescription"):
         kernel_desc_knob = _knob(blink, kernel_name)
         if kernel_desc_knob is not None:
             try:
-                # Empty value so legacy Nuke saves without embedded KernelDescription payload.
-                kernel_desc_knob.setValue("")
+                if str(kernel_desc_knob.value()):
+                    return True
             except Exception:
-                pass
-            break
+                return True
+            return False
+    return False
 
 
 def _apply_colorspace_defaults(node: Optional[nuke.Node]) -> None:
@@ -170,7 +263,16 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
         )
         return len(_PARAM_LINKS)
 
-    if force_recompile:
+    kernel_file_changed = _set_kernel_source_file_relative(blink)
+    kernel_file_mode = _is_kernel_source_file_mode(blink)
+    legacy_changed = _apply_legacy_blink_compat(blink)
+    legacy_recompile_needed = _needs_legacy_recompile(blink)
+
+    # For compatibility and file-mode loading we must compile before linking
+    # so generated Blink parameter knobs exist.
+    if kernel_file_changed or (force_recompile and kernel_file_mode):
+        _run_reload_kernel_source_file(blink)
+    if force_recompile or kernel_file_changed or legacy_changed or legacy_recompile_needed:
         _run_recompile(blink)
 
     unresolved = 0
@@ -209,7 +311,6 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
 
 def initialize_this_node() -> None:
     node = nuke.thisNode()
-    _apply_legacy_blink_compat(node)
     unresolved = _sync_links(node, force_recompile=True)
     if unresolved:
         # One more pass after recompile for setups that materialize knobs lazily.
@@ -229,7 +330,6 @@ def initialize_this_node() -> None:
 def handle_this_knob_changed() -> None:
     # Lightweight maintenance pass for script-load or delayed knob materialization.
     node = nuke.thisNode()
-    _apply_legacy_blink_compat(node)
     unresolved = _sync_links(node, force_recompile=False)
     if unresolved:
         _sync_links(node, force_recompile=True)
