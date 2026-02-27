@@ -26,6 +26,7 @@ _PARAM_LINKS = (
     ("hue_target_deg", "Hue Target (deg)", "hue_target_deg", (0.0, 360.0)),
     ("hue_target_shift", "Hue Target Shift", "hue_target_shift", (-180.0, 180.0)),
     ("hue_target_falloff_deg", "Hue Target Falloff", "hue_target_falloff_deg", (1.0, 180.0)),
+    ("hue_curves_enable", "Hue Curves Enable", "hue_curves_enable", None),
     ("mix", "Mix", "mix", (0.0, 1.0)),
     ("clamp_output", "Clamp Output", "clamp_output", None),
     ("bypass", "Bypass", "bypass", None),
@@ -88,6 +89,27 @@ def _resolve_blink_knob_name(blink: nuke.Node, label: str, internal_name: str) -
         if _knob(blink, candidate) is not None:
             return candidate
     return None
+
+
+def _set_blink_param_if_exists(
+    blink: Optional[nuke.Node],
+    internal_name: str,
+    label: str,
+    value,
+) -> bool:
+    if blink is None:
+        return False
+    resolved = _resolve_blink_knob_name(blink, label, internal_name)
+    if not resolved:
+        return False
+    knob = _knob(blink, resolved)
+    if knob is None:
+        return False
+    try:
+        knob.setValue(value)
+        return True
+    except Exception:
+        return False
 
 
 def _missing_param_knobs(blink: Optional[nuke.Node]) -> list[str]:
@@ -378,6 +400,80 @@ def _apply_colorspace_defaults(node: Optional[nuke.Node]) -> None:
     _set_status(node, status)
 
 
+def _ensure_hue_lut_format() -> None:
+    try:
+        nuke.addFormat("360 1 1 HueLUT_360x1")
+    except Exception:
+        # Format is likely already present.
+        pass
+
+
+def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
+    if node is None:
+        return
+
+    blink = node.node("BlinkScript_OKLCHGrade")
+    if blink is None:
+        return
+
+    expr = node.node("Expression_HueRamp")
+    lut = node.node("ColorLookup_HueCurves")
+    ocio_in = node.node("OCIOColorSpace_IN")
+
+    # Keep explicit input order stable in case legacy scripts lost input wiring.
+    try:
+        if ocio_in is not None and blink.input(0) is not ocio_in:
+            blink.setInput(0, ocio_in)
+    except Exception:
+        pass
+    try:
+        if lut is not None and blink.input(1) is not lut:
+            blink.setInput(1, lut)
+    except Exception:
+        pass
+
+    width = 360
+    try:
+        if expr is not None:
+            width = max(int(expr.format().width()), 2)
+    except Exception:
+        width = 360
+
+    connected = False
+    try:
+        connected = expr is not None and lut is not None and blink.input(1) is lut
+    except Exception:
+        connected = False
+
+    _set_blink_param_if_exists(blink, "hue_lut_width", "Hue LUT Width", width)
+    _set_blink_param_if_exists(blink, "hue_lut_connected", "Hue LUT Connected", connected)
+
+    hue_curves_knob = _knob(node, "hue_curves_enable")
+    curves_requested = False
+    if hue_curves_knob is not None:
+        try:
+            curves_requested = bool(hue_curves_knob.value())
+        except Exception:
+            curves_requested = False
+
+    if not connected:
+        _set_blink_param_if_exists(blink, "hue_curves_enable", "Hue Curves Enable", False)
+        if hue_curves_knob is not None:
+            try:
+                hue_curves_knob.setValue(False)
+            except Exception:
+                pass
+        if curves_requested:
+            _set_status(
+                node,
+                (
+                    "<font color='#cc9966'><small><b>Status:</b> "
+                    "Hue Curves disabled: missing internal LUT helper nodes in this instance."
+                    "</small></font>"
+                ),
+            )
+
+
 def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
     """Resolve and set link targets. Returns number of unresolved controls."""
     if node is None:
@@ -437,12 +533,14 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
 
 def initialize_this_node() -> None:
     node = nuke.thisNode()
+    _ensure_hue_lut_format()
     _apply_colorspace_defaults(node)
     unresolved = _sync_links(node, force_recompile=True)
     if unresolved:
         # One more forced pass for legacy setups where params appear after
         # first compile/reload cycle.
         unresolved = _sync_links(node, force_recompile=True)
+    _sync_hue_lut_state(node)
     if unresolved:
         if "#cc6666" in _status_value(node).lower():
             return
@@ -462,3 +560,4 @@ def handle_this_knob_changed() -> None:
     unresolved = _sync_links(node, force_recompile=False)
     if unresolved:
         _sync_links(node, force_recompile=True)
+    _sync_hue_lut_state(node)

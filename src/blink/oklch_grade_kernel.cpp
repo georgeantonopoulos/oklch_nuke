@@ -1,5 +1,6 @@
 kernel OKLCHGrade : ImageComputationKernel<ePixelWise> {
   Image<eRead, eAccessPoint, eEdgeClamped> src;
+  Image<eRead, eAccessRandom, eEdgeClamped> hueLUT;
   Image<eWrite> dst;
 
 param:
@@ -53,6 +54,11 @@ param:
   bool bypass;
   int debug_mode;
 
+  // --- Hue Curves ---
+  bool hue_curves_enable;
+  int hue_lut_width;
+  bool hue_lut_connected;
+
   void define() {
     defineParam(l_gain, "L Gain", 1.0f);
     defineParam(l_offset, "L Offset", 0.0f);
@@ -79,6 +85,10 @@ param:
     defineParam(clamp_output, "Clamp Output", false);
     defineParam(bypass, "Bypass", false);
     defineParam(debug_mode, "Debug Mode", 0);
+
+    defineParam(hue_curves_enable, "Hue Curves Enable", false);
+    defineParam(hue_lut_width, "Hue LUT Width", 360);
+    defineParam(hue_lut_connected, "Hue LUT Connected", false);
   }
 
   // ---------------------------------------------------------------------------
@@ -128,6 +138,14 @@ param:
     // cos(pi * norm): 1 at centre, 0 at edges, smooth cosine falloff
     float pi = 3.1415926536f;
     return 0.5f * (1.0f + cos(pi * norm));
+  }
+
+  float3 sample_hue_lut(float hue_deg) {
+    float w = max(float(hue_lut_width), 2.0f);
+    float norm = wrap_hue_deg(hue_deg) / 360.0f;
+    float lut_x = norm * (w - 1.0f);
+    float4 lut_val = bilinear(hueLUT, lut_x + 0.5f, 0.5f);
+    return float3(lut_val.x, lut_val.y, lut_val.z);
   }
 
   // ---------------------------------------------------------------------------
@@ -254,6 +272,15 @@ param:
     if (graded_C < 0.0f)
       graded_C = 0.0f;
 
+    // --- Hue Curves: per-hue L/C multipliers ---
+    if (hue_curves_enable && hue_lut_connected && hue_lut_width > 1) {
+      float3 lut = sample_hue_lut(current_lch.z);
+      float l_curve_mult = lut.z * 2.0f; // Blue channel
+      float c_curve_mult = lut.y * 2.0f; // Green channel
+      graded_L = max(graded_L * l_curve_mult, 0.0f);
+      graded_C = max(graded_C * c_curve_mult, 0.0f);
+    }
+
     // --- Grade H ---
     // Feature 1: Chroma-based weight.
     // Below hue_chroma_threshold, all hue shifts fade to zero — achromatic
@@ -297,6 +324,13 @@ param:
         chroma_weight;
     total_hue_shift += hue_target_shift * target_weight;
 
+    // --- Hue Curves: per-hue hue offset ---
+    if (hue_curves_enable && hue_lut_connected && hue_lut_width > 1) {
+      float3 lut = sample_hue_lut(orig_H);
+      float curve_hue_shift = (lut.x - 0.5f) * 360.0f; // Red channel
+      total_hue_shift += curve_hue_shift * chroma_weight;
+    }
+
     float graded_H = wrap_hue_deg(orig_H + total_hue_shift);
 
     // --- Debug modes ---
@@ -316,6 +350,15 @@ param:
     if (debug_mode ==
         4) { // Chroma weight (visualise the achromatic falloff region)
       dst() = float4(chroma_weight, chroma_weight, chroma_weight, src_pixel.w);
+      return;
+    }
+    if (debug_mode == 5) { // Hue Curves LUT values
+      if (hue_curves_enable && hue_lut_connected && hue_lut_width > 1) {
+        float3 lut = sample_hue_lut(orig_H);
+        dst() = float4(lut.x, lut.y, lut.z, src_pixel.w);
+      } else {
+        dst() = float4(0.5f, 0.5f, 0.5f, src_pixel.w);
+      }
       return;
     }
 

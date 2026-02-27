@@ -43,6 +43,17 @@ Input → OCIOColorSpace_IN → BlinkScript_OKLCHGrade → OCIOColorSpace_OUT �
 `BlinkScript_OKLCHGrade` runs the Blink kernel entirely in linear-sRGB.
 `OCIOColorSpace_OUT` converts from `lin_srgb` → `output_colorspace`.
 
+**Hue Curves LUT pipeline (inside gizmo group):**
+
+```
+Expression_HueRamp (360x1) -> ColorLookup_HueCurves -> BlinkScript_OKLCHGrade input 1
+```
+
+`Expression_HueRamp` generates a normalized hue axis (0..1 across X).
+`ColorLookup_HueCurves` encodes per-hue controls in channels: `R = hue shift`, `G = chroma gain`, `B = lightness gain`.
+The kernel samples this LUT at each pixel's original OKLCH hue (`eAccessRandom`, bilinear sample).
+Defaults are identity (`0.5` in each channel), gated by `hue_curves_enable`.
+
 **Startup sequence (two supported install layouts):**
 
 | File | Purpose |

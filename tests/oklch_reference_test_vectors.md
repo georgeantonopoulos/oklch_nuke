@@ -73,3 +73,46 @@ Use these RGBA values:
 
 - Run with OCIO config lacking listed aliases.
 - Expected: warning status text shown; bypass enabled fail-safe.
+
+## Hue Curves
+
+These checks validate the internal `Expression_HueRamp -> ColorLookup_HueCurves -> Blink input 1` path.
+
+### 1) Identity with curves enabled
+
+- Enable `hue_curves_enable`.
+- Keep `Hue Curves` red/green/blue channels flat at `0.5`.
+- Input: `(1.0, 0.0, 0.0, 1.0)`.
+- Expected: output ~= input within `max_abs_err <= 1e-5`.
+
+### 2) Hue curve shift around red
+
+- In the red channel curve, set point near `x ~= 0.08` (about 29° hue) to `y ~= 0.75`.
+- Input: `(1.0, 0.0, 0.0, 1.0)`.
+- Expected: hue rotates by about +90° while keeping alpha unchanged.
+
+### 3) Chroma curve suppression
+
+- Reset red channel to `0.5`.
+- In green channel curve, set point near `x ~= 0.08` to `y = 0.0`.
+- Input: `(1.0, 0.0, 0.0, 1.0)`.
+- Expected: chroma strongly reduced toward neutral; no NaN/Inf.
+
+### 4) Lightness curve attenuation
+
+- Reset green channel to `0.5`.
+- In blue channel curve, set point near `x ~= 0.08` to `y = 0.25`.
+- Input: `(1.0, 0.0, 0.0, 1.0)`.
+- Expected: lightness decreases to roughly 50% of uncurved grade result for that hue.
+
+### 5) Curves bypassed when disabled
+
+- Keep extreme curve edits from previous tests.
+- Disable `hue_curves_enable`.
+- Expected: output matches standard OKLCH grade path (curves ignored).
+
+### 6) Debug LUT visualization
+
+- Set `debug_mode = 5`.
+- With curves enabled and connected, expected output RGB corresponds to sampled LUT `(R=HueShiftEnc, G=ChromaEnc, B=LightnessEnc)`.
+- With curves disabled/unavailable, expected output RGB is constant `(0.5, 0.5, 0.5)`.
