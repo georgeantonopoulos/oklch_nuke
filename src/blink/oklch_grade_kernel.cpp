@@ -283,7 +283,7 @@ param:
 
     // --- Grade H ---
     // Feature 1: Chroma-based weight.
-    // Below hue_chroma_threshold, all hue shifts fade to zero — achromatic
+    // Below hue_chroma_threshold, all hue shifts fade to zero -- achromatic
     // pixels (neutrals, near-blacks, near-whites) are left untouched.
     // smooth_ramp() is our own cubic Hermite (smoothstep is GLSL-only, not
     // Blink).
@@ -312,7 +312,7 @@ param:
     total_hue_shift += hue_shift_magenta *
                        hue_band_weight(orig_H, 325.0f, half) * chroma_weight;
 
-    // Red band wraps around 360/0 — add a second lobe at 360 to catch hues near
+    // Red band wraps around 360/0 -- add a second lobe at 360 to catch hues near
     // 360
     total_hue_shift +=
         hue_shift_red * hue_band_weight(orig_H, 360.0f, half) * chroma_weight;
