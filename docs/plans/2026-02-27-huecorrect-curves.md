@@ -4,7 +4,7 @@
 
 **Goal:** Add a HueCorrect-style curve widget to the OKLCH Grade gizmo that lets users draw per-hue corrections for Hue Shift, Chroma, and Lightness in OKLCH space.
 
-**Architecture:** An internal `Expression` node generates a 360×1 horizontal ramp (normalized 0–1). This feeds an internal `ColorLookup` node whose RGB curves encode three OKLCH corrections. The ColorLookup output connects as a second input to the BlinkScript kernel, which samples the 1D LUT at each pixel's OKLCH hue angle using `eAccessRandom`. The user edits curves via linked knobs on a new "Hue Curves" tab on the gizmo.
+**Architecture:** An internal `Expression` node generates a 360×1 horizontal ramp (normalized 0–1). This feeds an internal `ColorLookup` node whose RGB curves encode three OKLCH corrections. The ColorLookup output connects as a second input to the BlinkScript kernel, which samples the 1D LUT at each pixel's OKLCH hue angle using `eAccessRandom` (with bilinear filtering for smooth interpolation). The user edits curves via linked knobs on a new "Hue Curves" tab on the gizmo. Callback initialization also syncs LUT metadata (`hue_lut_width`, `hue_lut_connected`) so old scripts fail safe.
 
 **Tech Stack:** Nuke BlinkScript (Blink C++), Nuke Python API, `.gizmo` TCL format, OKLCH color math.
 
@@ -91,19 +91,23 @@ ColorLookup {
 
 **Step 3: Connect ColorLookup as input 1 of BlinkScript**
 
-The BlinkScript node needs `inputs 2` and its input 1 wired to `ColorLookup_HueCurves`. Update the BlinkScript node definition:
+Set `BlinkScript_OKLCHGrade` to `inputs 2`, then explicitly wire both inputs (do not rely on `inputs 2` alone):
 
-```tcl
-BlinkScript {
-  inputs 2
-  ...
-  name BlinkScript_OKLCHGrade
-  ...
-}
-set C0123 [stack 0]
+- input 0 = `OCIOColorSpace_IN`
+- input 1 = `ColorLookup_HueCurves`
+
+Recommended verification snippet in Script Editor:
+
+```python
+g = nuke.thisNode()  # inside the group while editing the gizmo
+blink = g.node("BlinkScript_OKLCHGrade")
+ocio_in = g.node("OCIOColorSpace_IN")
+hue_lut = g.node("ColorLookup_HueCurves")
+blink.setInput(0, ocio_in)
+blink.setInput(1, hue_lut)
+assert blink.input(0).name() == "OCIOColorSpace_IN"
+assert blink.input(1).name() == "ColorLookup_HueCurves"
 ```
-
-The connection order: input 0 = `OCIOColorSpace_IN`, input 1 = `ColorLookup_HueCurves`.
 
 **Step 4: Add the "Hue Curves" tab and linked knobs to the gizmo panel**
 
@@ -114,17 +118,11 @@ addUserKnob {20 hue_curves_tab l "Hue Curves"}
 addUserKnob {6 hue_curves_enable l "Enable Hue Curves" +STARTLINE}
 addUserKnob {26 hue_curves_help l "" +STARTLINE T "<small>Draw curves to adjust Hue/Chroma/Lightness per input hue. X axis = OKLCH hue (0°–360°). Y axis = correction amount (0.5 = no change).</small>"}
 addUserKnob {26 "" +STARTLINE}
-addUserKnob {26 curve_label_hue l "" +STARTLINE T "<b>Hue Shift</b> <small>(Red curve: 0.5 = no shift, 0 = −180°, 1 = +180°)</small>"}
-addUserKnob {41 hue_shift_curve l "" T ColorLookup_HueCurves.lut.red}
-addUserKnob {26 "" +STARTLINE}
-addUserKnob {26 curve_label_chroma l "" +STARTLINE T "<b>Chroma Gain</b> <small>(Green curve: 0.5 = 1×, 0 = 0×, 1 = 2×)</small>"}
-addUserKnob {41 chroma_curve l "" T ColorLookup_HueCurves.lut.green}
-addUserKnob {26 "" +STARTLINE}
-addUserKnob {26 curve_label_lightness l "" +STARTLINE T "<b>Lightness Gain</b> <small>(Blue curve: 0.5 = 1×, 0 = 0×, 1 = 2×)</small>"}
-addUserKnob {41 lightness_curve l "" T ColorLookup_HueCurves.lut.blue}
+addUserKnob {26 curve_mapping_label l "" +STARTLINE T "<b>Curve Mapping</b> <small>R=Hue Shift, G=Chroma Gain, B=Lightness Gain</small>"}
+addUserKnob {41 hue_curves_lut l "Hue Curves" T ColorLookup_HueCurves.lut}
 ```
 
-> **NOTE:** The `{41 ... T ColorLookup_HueCurves.lut.red}` Link_Knob syntax for individual ColorLookup curve channels may not be supported. If linking individual curves fails, **fallback approach:** link the entire `lut` knob instead (`{41 hue_curves l "Hue Curves" T ColorLookup_HueCurves.lut}`) and rely on the curve-name labels (red/green/blue) with descriptive text knobs above.
+> **NOTE:** Use a single linked `lut` knob as the default implementation for reliability. Channel-specific link targets (`lut.red`, etc.) should only be attempted if confirmed in your exact Nuke build via `LookupCurves_Knob.fullyQualifiedName(channel=...)`.
 
 **Step 5: Verify in Nuke**
 
@@ -146,6 +144,7 @@ git commit -m "feat(gizmo): add internal Ramp + ColorLookup nodes for hue curves
 
 **Files:**
 - Modify: `src/blink/oklch_grade_kernel.cpp`
+- Modify: `src/gizmos/OKLCH_Grade.gizmo`
 
 **Step 1: Add the LUT image input and enable param**
 
@@ -161,7 +160,8 @@ param:
 
   // --- Hue Curves ---
   bool hue_curves_enable;
-  int hue_lut_width;   // width of the LUT image (default 360)
+  int hue_lut_width;      // width of LUT image (synced by callbacks)
+  bool hue_lut_connected; // callbacks set true only when helper nodes are present
 ```
 
 Add to `define()`:
@@ -169,49 +169,56 @@ Add to `define()`:
 ```cpp
 defineParam(hue_curves_enable, "Hue Curves Enable", false);
 defineParam(hue_lut_width, "Hue LUT Width", 360);
+defineParam(hue_lut_connected, "Hue LUT Connected", false);
 ```
 
 **Step 2: Add a LUT sampling helper function**
 
 ```cpp
 float3 sample_hue_lut(float hue_deg) {
-  float norm = wrap_hue_deg(hue_deg) / 360.0f;
-  int lut_x = int(norm * float(hue_lut_width - 1) + 0.5f);
-  if (lut_x < 0) lut_x = 0;
-  if (lut_x >= hue_lut_width) lut_x = hue_lut_width - 1;
-  float4 lut_val = hueLUT(lut_x, 0);
+  float w = max(float(hue_lut_width), 2.0f);
+  float norm = wrap_hue_deg(hue_deg) / 360.0f;  // [0,1)
+  float lut_x = norm * (w - 1.0f);
+  // Use bilinear sampling for smoother response than nearest-neighbour.
+  float4 lut_val = bilinear(hueLUT, lut_x + 0.5f, 0.5f);
   return float3(lut_val.x, lut_val.y, lut_val.z);
 }
 ```
 
 **Step 3: Apply curve corrections in `process()`**
 
-After existing L/C grading and before hue reconstruction, add:
+Use two guarded applications: one in the L/C block and one in the hue-shift block.
 
 ```cpp
-// --- Hue Curves (per-hue LUT corrections) ---
-if (hue_curves_enable) {
+// --- Hue Curves: L/C multipliers ---
+if (hue_curves_enable && hue_lut_connected && hue_lut_width > 1) {
   float3 lut = sample_hue_lut(current_lch.z);  // sample at ORIGINAL hue
 
-  // Lightness: multiply by curve value (0.5 in LUT = 1× = no change)
+  // Lightness multiplier (0.5 => 1x)
   float l_curve_mult = lut.z * 2.0f;  // Blue channel → lightness
   graded_L = graded_L * l_curve_mult;
   if (graded_L < 0.0f) graded_L = 0.0f;
 
-  // Chroma: multiply by curve value
+  // Chroma multiplier (0.5 => 1x)
   float c_curve_mult = lut.y * 2.0f;  // Green channel → chroma
   graded_C = graded_C * c_curve_mult;
   if (graded_C < 0.0f) graded_C = 0.0f;
+}
 
-  // Hue: add curve-based shift (weighted by chroma)
+// --- Hue Curves: hue offset ---
+if (hue_curves_enable && hue_lut_connected && hue_lut_width > 1) {
+  float3 lut = sample_hue_lut(current_lch.z);
   float curve_hue_shift = (lut.x - 0.5f) * 360.0f;  // Red channel → hue shift
   total_hue_shift += curve_hue_shift * chroma_weight;
 }
 ```
 
-The curve hue shift should be added AFTER existing per-band shifts and BEFORE `wrap_hue_deg`. Insert this block between the target hue correction block and the `float graded_H = wrap_hue_deg(...)` line.
+Placement requirements:
+- L/C curve multipliers: after existing global L/C grading + floor clamps.
+- Curve hue shift: after global/per-band/target hue accumulation and before `wrap_hue_deg`.
+- Keep sampling at original hue (`current_lch.z`) to avoid feedback from already-shifted hue.
 
-The L and C curve corrections should be applied AFTER the existing global L/C grading (after `graded_L` and `graded_C` are computed and clamped).
+Also update the embedded Blink kernel source in `OKLCH_Grade.gizmo` (or explicitly enforce file-mode kernel loading) so the gizmo source and `src/blink/oklch_grade_kernel.cpp` cannot drift.
 
 **Step 4: Run identity test**
 
@@ -222,8 +229,8 @@ Verify using test vectors from `tests/oklch_reference_test_vectors.md`.
 **Step 5: Commit**
 
 ```bash
-git add src/blink/oklch_grade_kernel.cpp
-git commit -m "feat(kernel): add hueLUT input and per-hue curve correction sampling"
+git add src/blink/oklch_grade_kernel.cpp src/gizmos/OKLCH_Grade.gizmo
+git commit -m "feat(kernel): add guarded hue LUT sampling with bilinear filtering and sync kernel source updates"
 ```
 
 ---
@@ -237,34 +244,50 @@ git commit -m "feat(kernel): add hueLUT input and per-hue curve correction sampl
 
 ```python
 ("hue_curves_enable", "Hue Curves Enable", "hue_curves_enable", None),
-("hue_lut_width", "Hue LUT Width", "hue_lut_width", None),
 ```
 
-The `hue_lut_width` param should be set automatically (not user-facing). Add it to the link list but the gizmo knob should be `+INVISIBLE`.
+`hue_lut_width` and `hue_lut_connected` should be internal kernel params set directly on the Blink node (no public Link_Knob needed).
 
-**Step 2: Add LUT width sync in `_apply_colorspace_defaults` or a new helper**
+**Step 2: Add LUT metadata sync helper**
 
-After the BlinkScript recompile, set `hue_lut_width` to match the Expression node's format width:
+After BlinkScript recompile, set `hue_lut_width` and `hue_lut_connected` from internal node state:
 
 ```python
-def _sync_hue_lut_width(node):
+def _sync_hue_lut_state(node):
     blink = node.node("BlinkScript_OKLCHGrade")
     expr = node.node("Expression_HueRamp")
+    lut = node.node("ColorLookup_HueCurves")
     if blink is None or expr is None:
+        _set_blink_param_if_exists(blink, "hue_lut_connected", False)
         return
-    width_knob = _knob(blink, "hue_lut_width")
-    if width_knob is None:
-        # Try resolved name
-        width_knob = _knob(blink, _resolve_blink_knob_name(blink, "Hue LUT Width", "hue_lut_width"))
-    if width_knob is not None:
-        try:
-            fmt = expr.format()
-            width_knob.setValue(fmt.width())
-        except Exception:
-            width_knob.setValue(360)
+    width = 360
+    try:
+        width = max(int(expr.format().width()), 2)
+    except Exception:
+        pass
+    _set_blink_param_if_exists(blink, "hue_lut_width", width)
+    connected = bool(blink.input(1) is not None and lut is not None)
+    _set_blink_param_if_exists(blink, "hue_lut_connected", connected)
 ```
 
-Call this from `initialize_this_node()` after `_sync_links`.
+Call this from both `initialize_this_node()` and `handle_this_knob_changed()` after link sync so script-load and delayed materialization are both covered.
+
+Add a tiny utility used above:
+
+```python
+def _set_blink_param_if_exists(blink, internal_name, value):
+    if blink is None:
+        return
+    knob = _knob(blink, internal_name)
+    if knob is None:
+        resolved = _resolve_blink_knob_name(blink, internal_name.replace("_", " ").title(), internal_name)
+        knob = _knob(blink, resolved) if resolved else None
+    if knob is not None:
+        try:
+            knob.setValue(value)
+        except Exception:
+            pass
+```
 
 **Step 3: Verify knob linking works end-to-end**
 
@@ -335,7 +358,7 @@ git commit -m "feat: register HueLUT format and verify ramp output"
 
 **Step 2: Test hue shift curve**
 
-1. Pull the red curve up to ~0.75 at x=0 (hue 0°)
+1. Pull the red curve up to ~0.75 at x≈0.08 (hue ≈29°, where linear sRGB red lands in OKLCH)
 2. This encodes a hue shift of `(0.75 - 0.5) * 360 = +90°` for reds
 3. Feed linear sRGB red `[1, 0, 0]` (OKLCH hue ≈ 29°)
 4. Expected: hue rotates by ~+90° (red → yellow-green region)
@@ -400,7 +423,7 @@ Add `debug_mode == 5` to show the raw LUT values applied to each pixel:
 
 ```cpp
 if (debug_mode == 5) { // Hue Curves LUT
-  if (hue_curves_enable) {
+  if (hue_curves_enable && hue_lut_connected && hue_lut_width > 1) {
     float3 lut = sample_hue_lut(current_lch.z);
     dst() = float4(lut.x, lut.y, lut.z, src_pixel.w);
   } else {
@@ -418,18 +441,21 @@ When loading an old `.nk` script that has the OKLCH_Grade gizmo without hue curv
 - `hue_curves_enable` defaults to `false` → no effect
 - The kernel still expects input 1, but with `inputs 1` the BlinkScript may error
 
-This needs careful handling. If the gizmo saved before the curve feature was added, `Expression_HueRamp` and `ColorLookup_HueCurves` won't exist inside the group.
+This needs careful handling. If the gizmo saved before the curve feature was added, `Expression_HueRamp` and `ColorLookup_HueCurves` might not exist inside the group.
 
 In the kernel, guard the LUT access:
 
 ```cpp
-// Only sample if curves are enabled AND the LUT is valid
-if (hue_curves_enable && hue_lut_width > 0) {
+// Only sample if curves are enabled and callbacks marked LUT input valid
+if (hue_curves_enable && hue_lut_connected && hue_lut_width > 1) {
   // ... sample and apply
 }
 ```
 
-In the callbacks, `initialize_this_node()` should check for the existence of these internal nodes and log a status warning if they're missing but curves are enabled.
+In the callbacks, if helper nodes are missing:
+- set `hue_lut_connected = false`
+- force `hue_curves_enable` public knob to `false`
+- show a status warning that curves are unavailable in this legacy instance.
 
 **Step 4: Commit**
 
@@ -480,16 +506,17 @@ git commit -m "docs: document hue curves LUT architecture"
 
 | Risk | Mitigation |
 |------|-----------|
-| ColorLookup individual curve linking (`lut.red`) may not work via Link_Knob | Fallback: link entire `lut` knob with text labels above each curve section |
-| BlinkScript `inputs 2` with missing input 1 on old scripts | Guard LUT access behind `hue_curves_enable && hue_lut_width > 0` |
+| ColorLookup individual curve linking (`lut.red`) may not work via Link_Knob | Default to single linked `lut` knob; only use per-channel targets if verified in that Nuke build |
+| BlinkScript `inputs 2` with missing input 1 on old scripts | Explicit input wiring + guard behind `hue_curves_enable && hue_lut_connected && hue_lut_width > 1` |
 | LUT edge discontinuity at hue 0°/360° | Document in help text; accept for v1 |
-| Performance: `eAccessRandom` on a second input | 360×1 image is tiny; negligible cost vs pixel-wise OKLCH math |
+| Kernel source drift between `.cpp` and embedded gizmo `kernelSource` | Enforce file-mode kernel loading, or keep both kernel sources updated together in same change |
+| Performance: `eAccessRandom` on a second input | 360×1 image is tiny; use bilinear sampling for smoother behavior with minimal overhead |
 | Nuke < 16 compatibility with second BlinkScript input | `eAccessRandom` is available in Blink API since Nuke 11+; should be safe |
 
-## Open Questions for User
+## Resolved Decisions (from review)
 
-1. **Curve labels**: If individual curve linking fails, are you OK with a single curve widget showing red/green/blue channels with text labels explaining the mapping? Or would you prefer 3 separate ColorLookup nodes with individual `master` curves?
+1. **Curve UI strategy**: Use one `ColorLookup_HueCurves` with a single linked `lut` knob (R/G/B channel mapping labels in UI). Do **not** split into 3 ColorLookup nodes for v1.
 
-2. **LUT resolution**: 360 pixels (1 per degree) is chosen for simplicity. Would you prefer 720 (smoother interpolation) at the cost of a slightly larger internal image?
+2. **LUT resolution**: Keep `360` as v1 default and use bilinear sampling in kernel. Revisit `720` only if banding/stepping is observed in real shots.
 
-3. **Interaction with existing per-band hue shifts**: The curve hue shift is additive to the per-band shifts. Should the curves replace the per-band system entirely in a future version, or coexist permanently?
+3. **Interaction with existing hue controls**: Curves and existing per-band/global/target hue shifts coexist additively in v1 for backward compatibility. Re-evaluate consolidation only after usage feedback.
