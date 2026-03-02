@@ -12,11 +12,13 @@ import nuke
 
 try:
     from PySide6.QtCore import Qt  # type: ignore[import-untyped]
+    from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap  # type: ignore[import-untyped]
     from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout  # type: ignore[import-untyped]
     _HAS_QT = True
 except Exception:
     try:
         from PySide2.QtCore import Qt  # type: ignore[import-untyped,no-redef]
+        from PySide2.QtGui import QColor, QIcon, QPainter, QPen, QPixmap  # type: ignore[import-untyped,no-redef]
         from PySide2.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout  # type: ignore[import-untyped,no-redef]
         _HAS_QT = True
     except Exception:
@@ -102,14 +104,16 @@ class HueCurveEditorWindow(QDialog):
         # Eyedropper toolbar
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(0, 0, 0, 0)
-        # U+1F4A7 = droplet — renders reliably in Qt on all platforms
-        self._pick_btn = QPushButton("\U0001f4a7")
+        self._pick_btn = QPushButton()
         self._pick_btn.setToolTip(
             "Click this button, then Ctrl-click a pixel in the Nuke viewer "
             "to add a control point at that pixel's hue."
         )
         self._pick_btn.setCheckable(True)
         self._pick_btn.clicked.connect(self._toggle_pick_mode)
+        # Draw an eyedropper icon on a small pixmap
+        self._pick_btn.setFixedSize(28, 28)
+        self._set_pick_icon(checked=False)
         toolbar.addWidget(self._pick_btn)
         self._pick_status = QLabel("")
         toolbar.addWidget(self._pick_status)
