@@ -424,9 +424,11 @@ if _HAS_QT:
             pts[idx] = (_clamp(x, left, right), y)
             self._points = pts
 
-        def _commit_visual(self):
-            """Normalize and repaint only — no knob writes (used during drag)."""
+        def _commit_drag(self):
+            """Normalize, push LUT expression, repaint — skip save and wiring checks."""
             self._points = _normalize(self._points)
+            if self._allow_edit and self._push_runtime_lut:
+                self._push_direct_lut_expression()
             self.update()
 
         def _commit(self):
@@ -567,7 +569,7 @@ if _HAS_QT:
                     return
                 x, y = self._from_canvas(self._event_pos(ev))
                 self._move_point(self._drag_idx, x, y)
-                self._commit_visual()
+                self._commit_drag()
             except Exception as exc:
                 _debug("widget.mouseMoveEvent failed", node=self._node, error=exc)
                 self._drag_idx = None
