@@ -73,3 +73,44 @@ Use these RGBA values:
 
 - Run with OCIO config lacking listed aliases.
 - Expected: warning status text shown; bypass enabled fail-safe.
+
+## Hue Curves
+
+These checks validate the internal `Expression_HueRamp -> ColorLookup_HueCurves -> Blink input 1` path.
+
+### 1) Identity with curves enabled
+
+- Enable `hue_curves_enable`.
+- Keep the hue-curve LUT flat at scalar `1.0` (identity).
+- Input: `(1.0, 0.0, 0.0, 1.0)`.
+- Expected: output ~= input within `max_abs_err <= 1e-5`.
+
+### 2) Hue curve shift around red
+
+- Set point near `x ~= 0.08` (about 29° hue) to `y = 1.5`.
+- Input: `(1.0, 0.0, 0.0, 1.0)`.
+- Expected: hue rotates by about +90° while keeping alpha unchanged.
+
+### 3) Negative hue shift around red
+
+- Set point near `x ~= 0.08` to `y = 0.5`.
+- Input: `(1.0, 0.0, 0.0, 1.0)`.
+- Expected: hue rotates by about -90° while keeping alpha unchanged.
+
+### 4) Max negative shift edge case
+
+- Set point near `x ~= 0.08` to `y = 0.0`.
+- Input: `(1.0, 0.0, 0.0, 1.0)`.
+- Expected: effective hue shift approaches -180°; no NaN/Inf.
+
+### 5) Curves bypassed when disabled
+
+- Keep extreme curve edits from previous tests.
+- Disable `hue_curves_enable`.
+- Expected: output matches standard OKLCH grade path (curves ignored).
+
+### 6) Debug LUT visualization
+
+- Set `debug_mode = 5`.
+- With curves enabled and connected, expected output is grayscale LUT scalar (`R=G=B=sampled_sat`).
+- With curves disabled/unavailable, expected output RGB is constant `(1.0, 1.0, 1.0)`.

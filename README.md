@@ -193,6 +193,34 @@ Reference test vectors live in `tests/oklch_reference_test_vectors.md`. They cov
 - Alpha passthrough
 - OCIO fallback when no linear-sRGB alias exists
 
+## Linux / Nuke16 Crash Isolation
+
+Result from studio testing (Linux + Nuke16 + Rez): inline PyCustom embedding
+is unstable in this environment.
+
+Current safe workflow:
+- Use **Open Floating Curve Editor** button in the Hue Curves tab for custom UI
+- Curve edits write directly to the internal 360x1 LUT expression consumed by BlinkScript
+
+Launch Nuke exactly as normal:
+
+```bash
+rez env nuke nuke_oklch==dev -- nuke
+```
+
+Callback diagnostics are always written to:
+- `/tmp/oklch_grade_callbacks.log`
+
+Inspect with:
+
+```bash
+tail -n 200 /tmp/oklch_grade_callbacks.log
+```
+
+Interpretation:
+1. If floating editor works and inline PyCustom does not, crash scope is PyCustom panel embedding on this stack.
+2. Direct LUT path avoids cross-space HueCorrect translation.
+
 ---
 
 ## References

@@ -1,5 +1,6 @@
 kernel OKLCHGrade : ImageComputationKernel<ePixelWise> {
   Image<eRead, eAccessPoint, eEdgeClamped> src;
+  Image<eRead, eAccessRandom, eEdgeClamped> hueLUT;
   Image<eWrite> dst;
 
 param:
@@ -53,6 +54,11 @@ param:
   bool bypass;
   int debug_mode;
 
+  // --- Hue Curves ---
+  bool hue_curves_enable;
+  int hue_lut_width;
+  bool hue_lut_connected;
+
   void define() {
     defineParam(l_gain, "L Gain", 1.0f);
     defineParam(l_offset, "L Offset", 0.0f);
@@ -79,6 +85,10 @@ param:
     defineParam(clamp_output, "Clamp Output", false);
     defineParam(bypass, "Bypass", false);
     defineParam(debug_mode, "Debug Mode", 0);
+
+    defineParam(hue_curves_enable, "Hue Curves Enable", false);
+    defineParam(hue_lut_width, "Hue LUT Width", 360);
+    defineParam(hue_lut_connected, "Hue LUT Connected", false);
   }
 
   // ---------------------------------------------------------------------------
@@ -128,6 +138,17 @@ param:
     // cos(pi * norm): 1 at centre, 0 at edges, smooth cosine falloff
     float pi = 3.1415926536f;
     return 0.5f * (1.0f + cos(pi * norm));
+  }
+
+  // Sample the direct hue LUT and extract its scalar value.
+  // The upstream Expression node writes a grayscale ramp where R=G=B=value.
+  // Taking max(R,G,B) therefore returns the authored LUT value.
+  float sample_hue_lut_sat(float hue_deg) {
+    float w = max(float(hue_lut_width), 2.0f);
+    float norm = wrap_hue_deg(hue_deg) / 360.0f;
+    float lut_x = norm * (w - 1.0f);
+    float4 lut_val = bilinear(hueLUT, lut_x + 0.5f, 0.5f);
+    return max(lut_val.x, max(lut_val.y, lut_val.z));
   }
 
   // ---------------------------------------------------------------------------
@@ -256,7 +277,7 @@ param:
 
     // --- Grade H ---
     // Feature 1: Chroma-based weight.
-    // Below hue_chroma_threshold, all hue shifts fade to zero — achromatic
+    // Below hue_chroma_threshold, all hue shifts fade to zero -- achromatic
     // pixels (neutrals, near-blacks, near-whites) are left untouched.
     // smooth_ramp() is our own cubic Hermite (smoothstep is GLSL-only, not
     // Blink).
@@ -285,7 +306,7 @@ param:
     total_hue_shift += hue_shift_magenta *
                        hue_band_weight(orig_H, 325.0f, half) * chroma_weight;
 
-    // Red band wraps around 360/0 — add a second lobe at 360 to catch hues near
+    // Red band wraps around 360/0 -- add a second lobe at 360 to catch hues near
     // 360
     total_hue_shift +=
         hue_shift_red * hue_band_weight(orig_H, 360.0f, half) * chroma_weight;
@@ -296,6 +317,15 @@ param:
         hue_band_weight(orig_H, wrap_hue_deg(hue_target_deg), safe_target_falloff) *
         chroma_weight;
     total_hue_shift += hue_target_shift * target_weight;
+
+    // --- Hue Curves: per-hue hue shift from the direct expression LUT ---
+    // LUT value encoding is scalar in [0..2] with neutral at 1.0.
+    // Encoding: sat=1.0 -> 0 shift, sat=0.0 -> -180, sat=2.0 -> +180.
+    if (hue_curves_enable && hue_lut_connected && hue_lut_width > 1) {
+      float sat_value = sample_hue_lut_sat(current_lch.z);
+      float curve_hue_shift = (sat_value - 1.0f) * 180.0f;
+      total_hue_shift += curve_hue_shift * chroma_weight;
+    }
 
     float graded_H = wrap_hue_deg(orig_H + total_hue_shift);
 
@@ -316,6 +346,15 @@ param:
     if (debug_mode ==
         4) { // Chroma weight (visualise the achromatic falloff region)
       dst() = float4(chroma_weight, chroma_weight, chroma_weight, src_pixel.w);
+      return;
+    }
+    if (debug_mode == 5) { // Hue Curves LUT sat value
+      if (hue_curves_enable && hue_lut_connected && hue_lut_width > 1) {
+        float sat_val = sample_hue_lut_sat(orig_H);
+        dst() = float4(sat_val, sat_val, sat_val, src_pixel.w);
+      } else {
+        dst() = float4(1.0f, 1.0f, 1.0f, src_pixel.w);
+      }
       return;
     }
 

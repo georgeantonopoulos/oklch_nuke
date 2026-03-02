@@ -43,6 +43,17 @@ Input → OCIOColorSpace_IN → BlinkScript_OKLCHGrade → OCIOColorSpace_OUT �
 `BlinkScript_OKLCHGrade` runs the Blink kernel entirely in linear-sRGB.
 `OCIOColorSpace_OUT` converts from `lin_srgb` → `output_colorspace`.
 
+**Hue Curves LUT pipeline (inside gizmo group):**
+
+```
+Expression_HueRamp (360x1) -> ColorLookup_HueCurves -> BlinkScript_OKLCHGrade input 1
+```
+
+`Expression_HueRamp` generates a normalized hue axis (0..1 across X).
+`ColorLookup_HueCurves` is sampled as a direct scalar LUT (grayscale ramp, `R=G=B=value`).
+The kernel bilinearly samples this LUT at each pixel's original OKLCH hue (`eAccessRandom`).
+Identity is scalar `1.0` (encoded shift: `(value - 1.0) * 180`), gated by `hue_curves_enable`.
+
 **Startup sequence (two supported install layouts):**
 
 | File | Purpose |
@@ -69,7 +80,7 @@ If none match, the gizmo enters fail-safe: both OCIO nodes disabled, `bypass` fo
 ## Key implementation notes
 
 - **BlinkScript constraints**: the kernel is `ePixelWise` — no neighbourhood access. No standard library. `signed_cbrt` is hand-rolled because BlinkScript's `pow` cannot take a negative base.
-- **Hue wrap**: `wrap_hue_deg` uses `fmod` (not `floor`, which is absent from BlinkScript's math surface). Handles negative remainder with an `if (wrapped < 0) wrapped += 360` guard.
+- **Hue wrap**: `wrap_hue_deg` uses floor-based wrapping and handles negatives with `if (wrapped < 0) wrapped += 360`.
 - **Chroma floor**: negative chroma after `c_offset` is hard-clamped to `0.0` before converting back, preventing imaginary colors.
 - **Alpha**: passed through unchanged (`dst() = float4(..., rgba.w)`). Grade math never touches channel 3.
 - **Menu guard**: `menu.py` uses `_oklch_grade_menu_registered` attribute on the `nuke` module to prevent duplicate toolbar entries on re-import.
