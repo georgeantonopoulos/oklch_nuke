@@ -206,20 +206,30 @@ export OKLCH_HUE_WIDGET_DEBUG=1
 export OKLCH_HUE_WIDGET_LOG=/tmp/oklch_hue_widget.log
 
 # Widget bisection mode:
-# off      -> no custom widget (fallback stub)
-# probe    -> minimal QWidget only (no paint/input)
+# off      -> no custom widget (fallback stub, no Qt import)
+# bare     -> raw QWidget only (no subclass, no paint/input)
+# probe    -> minimal QWidget subclass (no paint/input/data writes)
 # paint    -> paint-only diagnostic widget (no input/data writes)
 # readonly -> full curve render + data load, editing disabled
 # full     -> full interactive widget (default)
 export OKLCH_HUE_WIDGET_MODE=probe
 ```
 
+If Rez is not passing env vars into Nuke reliably, use a mode file instead:
+
+```bash
+mkdir -p ~/.nuke
+echo probe > ~/.nuke/oklch_hue_widget_mode.txt
+```
+
 Recommended sequence:
 
-1. `probe` — if this crashes, issue is basic PyCustom/QWidget lifecycle.
-2. `paint` — if this crashes, issue is in paint path.
-3. `readonly` — if this crashes, issue is likely data migration/load path.
-4. `full` — if only this crashes, issue is in edit interactions or HueCorrect writes.
+1. `off` — confirms the crash is inside custom PyCustom widget path.
+2. `bare` — isolates raw Qt widget creation.
+3. `probe` — isolates QWidget subclass lifecycle.
+4. `paint` — isolates paint path.
+5. `readonly` — isolates data-load path.
+6. `full` — isolates edit interactions / HueCorrect writes.
 
 Legacy hard disable still works:
 
