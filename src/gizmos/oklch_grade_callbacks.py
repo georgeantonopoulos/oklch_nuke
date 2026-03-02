@@ -1,4 +1,8 @@
-"""Runtime callbacks for robust OKLCH gizmo initialization in Nuke."""
+"""Runtime callbacks for robust OKLCH gizmo initialization in Nuke.
+
+All public entrypoints (initialize_this_node, handle_this_knob_changed) are
+wrapped in top-level try/except so that a callback failure never crashes Nuke.
+"""
 
 from __future__ import annotations
 
@@ -33,7 +37,24 @@ _PARAM_LINKS = (
     ("debug_mode", "Debug Mode", "debug_mode", None),
 )
 
-import hue_curve_data as _hcd
+# Knobs that actually require a re-sync when changed.  All others (slider
+# drags on linked params, UI cosmetic knobs) are ignored by knobChanged to
+# avoid expensive re-entrancy and unnecessary Blink recompiles.
+_KNOBS_NEEDING_SYNC = frozenset({
+    "hue_curves_enable",
+    "input_colorspace",
+    "output_colorspace",
+    "showPanel",         # panel open — triggers updateValue on PyCustom widgets
+})
+
+try:
+    import hue_curve_data as _hcd
+except Exception:
+    _hcd = None  # type: ignore[assignment]
+
+# Re-entrancy guard: prevents nested knobChanged → setValue → knobChanged
+# cascades that can crash Nuke.
+_in_callback = False
 
 _KERNEL_SOURCE_RELATIVE = os.path.join("blink", "oklch_grade_kernel.cpp")
 
@@ -411,6 +432,8 @@ def _ensure_hue_lut_format() -> None:
 
 
 def _ensure_hue_curve_data(node: Optional[nuke.Node], huecorrect: Optional[nuke.Node]) -> None:
+    if _hcd is None:
+        return
     curve_data_knob = _knob(node, "hue_curve_data")
     if curve_data_knob is None:
         return
@@ -562,6 +585,20 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
 
 
 def initialize_this_node() -> None:
+    """onCreate entrypoint — wrapped so exceptions never crash Nuke."""
+    global _in_callback
+    if _in_callback:
+        return
+    _in_callback = True
+    try:
+        _initialize_this_node_impl()
+    except Exception:
+        pass
+    finally:
+        _in_callback = False
+
+
+def _initialize_this_node_impl() -> None:
     node = nuke.thisNode()
     _ensure_hue_lut_format()
     _apply_colorspace_defaults(node)
@@ -578,14 +615,43 @@ def initialize_this_node() -> None:
             node,
             (
                 "<font color='#cc6666'><small><b>Status:</b> "
-                f"{unresolved} linked controls are unresolved. Open BlinkScript node and click Recompile."
+                "{} linked controls are unresolved. Open BlinkScript node and click Recompile."
                 "</small></font>"
-            ),
+            ).format(unresolved),
         )
 
 
 def handle_this_knob_changed() -> None:
-    # Lightweight maintenance pass for script-load or delayed knob materialization.
+    """knobChanged entrypoint — guarded against re-entrancy and throttled.
+
+    Only knobs in ``_KNOBS_NEEDING_SYNC`` trigger the expensive sync path.
+    All other knob changes (slider drags on linked params, etc.) are no-ops
+    because the Link_Knob mechanism already forwards values to BlinkScript.
+    """
+    global _in_callback
+    if _in_callback:
+        return
+
+    # Filter: only react to knobs that actually need attention.
+    try:
+        knob = nuke.thisKnob()
+        knob_name = knob.name() if knob is not None else ""
+    except Exception:
+        knob_name = ""
+
+    if knob_name and knob_name not in _KNOBS_NEEDING_SYNC:
+        return
+
+    _in_callback = True
+    try:
+        _handle_this_knob_changed_impl()
+    except Exception:
+        pass
+    finally:
+        _in_callback = False
+
+
+def _handle_this_knob_changed_impl() -> None:
     node = nuke.thisNode()
     unresolved = _sync_links(node, force_recompile=False)
     if unresolved:
