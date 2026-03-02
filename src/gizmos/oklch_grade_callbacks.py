@@ -60,6 +60,8 @@ _in_callback = False
 _KERNEL_SOURCE_RELATIVE = os.path.join("blink", "oklch_grade_kernel.cpp")
 _DEBUG_ENV = "OKLCH_GRADE_DEBUG"
 _DEBUG_LOG_ENV = "OKLCH_GRADE_DEBUG_LOG"
+_DEBUG_FILE = os.path.expanduser("~/.nuke/oklch_debug_on.txt")
+_DEBUG_DEFAULT_LOG = "/tmp/oklch_grade_callbacks.log"
 
 
 def _is_truthy(value: str) -> bool:
@@ -67,7 +69,19 @@ def _is_truthy(value: str) -> bool:
 
 
 def _debug_enabled() -> bool:
-    return _is_truthy(os.environ.get(_DEBUG_ENV, ""))
+    if _is_truthy(os.environ.get(_DEBUG_ENV, "")):
+        return True
+    try:
+        return os.path.isfile(_DEBUG_FILE)
+    except Exception:
+        return False
+
+
+def _debug_log_path() -> str:
+    env_path = os.environ.get(_DEBUG_LOG_ENV, "").strip()
+    if env_path:
+        return env_path
+    return _DEBUG_DEFAULT_LOG
 
 
 def _node_name(node: Optional[nuke.Node]) -> str:
@@ -97,7 +111,7 @@ def _debug(message: str, *, node: Optional[nuke.Node] = None, error: Optional[Ex
     except Exception:
         pass
 
-    log_path = os.environ.get(_DEBUG_LOG_ENV, "").strip()
+    log_path = _debug_log_path()
     if not log_path:
         return
     try:

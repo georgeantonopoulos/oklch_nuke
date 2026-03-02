@@ -19,6 +19,8 @@ _WIDGET_MODE_ENV = "OKLCH_HUE_WIDGET_MODE"
 _WIDGET_DEBUG_ENV = "OKLCH_HUE_WIDGET_DEBUG"
 _WIDGET_DEBUG_LOG_ENV = "OKLCH_HUE_WIDGET_LOG"
 _WIDGET_MODE_FILE = os.path.expanduser("~/.nuke/oklch_hue_widget_mode.txt")
+_WIDGET_DEBUG_FILE = os.path.expanduser("~/.nuke/oklch_debug_on.txt")
+_WIDGET_DEFAULT_LOG = "/tmp/oklch_hue_widget.log"
 
 
 class _FallbackWidget:
@@ -39,7 +41,19 @@ def _is_truthy(value: str) -> bool:
 
 
 def _debug_enabled() -> bool:
-    return _is_truthy(os.environ.get(_WIDGET_DEBUG_ENV, ""))
+    if _is_truthy(os.environ.get(_WIDGET_DEBUG_ENV, "")):
+        return True
+    try:
+        return os.path.isfile(_WIDGET_DEBUG_FILE)
+    except Exception:
+        return False
+
+
+def _debug_log_path() -> str:
+    env_path = os.environ.get(_WIDGET_DEBUG_LOG_ENV, "").strip()
+    if env_path:
+        return env_path
+    return _WIDGET_DEFAULT_LOG
 
 
 def _debug(message: str, *, error: Optional[Exception] = None) -> None:
@@ -58,7 +72,7 @@ def _debug(message: str, *, error: Optional[Exception] = None) -> None:
     except Exception:
         pass
 
-    log_path = os.environ.get(_WIDGET_DEBUG_LOG_ENV, "").strip()
+    log_path = _debug_log_path()
     if not log_path:
         return
     try:
@@ -208,3 +222,6 @@ def __getattr__(name: str):
 
         return getattr(_impl, name)
     raise AttributeError(name)
+
+
+_debug("module_loaded")

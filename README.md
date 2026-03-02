@@ -222,6 +222,17 @@ mkdir -p ~/.nuke
 echo probe > ~/.nuke/oklch_hue_widget_mode.txt
 ```
 
+For logging without env vars, create this file once:
+
+```bash
+mkdir -p ~/.nuke
+touch ~/.nuke/oklch_debug_on.txt
+```
+
+Default logs will then be written to:
+- `/tmp/oklch_hue_widget.log`
+- `/tmp/oklch_grade_callbacks.log`
+
 Recommended sequence:
 
 1. `off` — confirms the crash is inside custom PyCustom widget path.
