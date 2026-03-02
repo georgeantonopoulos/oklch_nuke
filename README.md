@@ -193,6 +193,40 @@ Reference test vectors live in `tests/oklch_reference_test_vectors.md`. They cov
 - Alpha passthrough
 - OCIO fallback when no linear-sRGB alias exists
 
+## Linux / Nuke16 Crash Isolation
+
+If Nuke 16 on Linux still crashes when opening the **Hue Curves** tab, you can
+strip the custom widget down in stages and enable logs:
+
+```bash
+# Optional: capture Python callback + widget logs
+export OKLCH_GRADE_DEBUG=1
+export OKLCH_GRADE_DEBUG_LOG=/tmp/oklch_grade_callbacks.log
+export OKLCH_HUE_WIDGET_DEBUG=1
+export OKLCH_HUE_WIDGET_LOG=/tmp/oklch_hue_widget.log
+
+# Widget bisection mode:
+# off      -> no custom widget (fallback stub)
+# probe    -> minimal QWidget only (no paint/input)
+# paint    -> paint-only diagnostic widget (no input/data writes)
+# readonly -> full curve render + data load, editing disabled
+# full     -> full interactive widget (default)
+export OKLCH_HUE_WIDGET_MODE=probe
+```
+
+Recommended sequence:
+
+1. `probe` — if this crashes, issue is basic PyCustom/QWidget lifecycle.
+2. `paint` — if this crashes, issue is in paint path.
+3. `readonly` — if this crashes, issue is likely data migration/load path.
+4. `full` — if only this crashes, issue is in edit interactions or HueCorrect writes.
+
+Legacy hard disable still works:
+
+```bash
+export OKLCH_DISABLE_HUE_CURVE_WIDGET=1
+```
+
 ---
 
 ## References

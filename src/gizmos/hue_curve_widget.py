@@ -13,6 +13,7 @@ IMPORTANT — Nuke's PyCustom_Knob lifecycle:
 
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import os
 from typing import Optional
@@ -31,6 +32,11 @@ except Exception:
 # Qt import — PySide6 first, then PySide2
 # ---------------------------------------------------------------------------
 _HAS_QT = False
+_QT_API = "none"
+
+_WIDGET_MODE_ENV = "OKLCH_HUE_WIDGET_MODE"
+_WIDGET_DEBUG_ENV = "OKLCH_HUE_WIDGET_DEBUG"
+_WIDGET_DEBUG_LOG_ENV = "OKLCH_HUE_WIDGET_LOG"
 
 try:
     from PySide6.QtCore import QPointF, QRectF, QSize, Qt  # type: ignore[import-untyped]
@@ -50,6 +56,7 @@ try:
         QWidget,
     )
     _HAS_QT = True
+    _QT_API = "PySide6"
 except Exception:
     try:
         from PySide2.QtCore import QPointF, QRectF, QSize, Qt  # type: ignore[import-untyped,no-redef]
@@ -69,6 +76,7 @@ except Exception:
             QWidget,
         )
         _HAS_QT = True
+        _QT_API = "PySide2"
     except Exception:
         pass
 
@@ -118,6 +126,82 @@ _RAINBOW_STOPS = (
     (0.75, "#8e67ef"), (0.83, "#bf62e8"), (0.92, "#e55eb8"),
     (1.00, "#ff4d4d"),
 )
+
+
+# ---------------------------------------------------------------------------
+# Diagnostics
+# ---------------------------------------------------------------------------
+
+def _is_truthy(value: str) -> bool:
+    return str(value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _node_name(node) -> str:
+    if node is None:
+        return "<none>"
+    try:
+        return str(node.fullName())
+    except Exception:
+        try:
+            return str(node.name())
+        except Exception:
+            return "<unknown>"
+
+
+def _widget_mode() -> str:
+    raw = os.environ.get(_WIDGET_MODE_ENV, "full").strip().lower()
+    aliases = {
+        "interactive": "full",
+        "minimal": "probe",
+        "disabled": "off",
+    }
+    mode = aliases.get(raw, raw)
+    if mode not in ("off", "probe", "paint", "readonly", "full"):
+        return "full"
+    return mode
+
+
+def _debug_enabled() -> bool:
+    return _is_truthy(os.environ.get(_WIDGET_DEBUG_ENV, ""))
+
+
+def _debug(message: str, *, node=None, error: Optional[Exception] = None) -> None:
+    if not _debug_enabled():
+        return
+    ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    line = (
+        f"[{ts}] pid={os.getpid()} mode={_widget_mode()} node={_node_name(node)} "
+        f"{message}"
+    )
+    if error is not None:
+        line += f" error={error!r}"
+
+    try:
+        if nuke is not None and hasattr(nuke, "tprint"):
+            nuke.tprint(f"[OKLCH HueWidget] {line}")
+        else:
+            print(f"[OKLCH HueWidget] {line}")
+    except Exception:
+        pass
+
+    log_path = os.environ.get(_WIDGET_DEBUG_LOG_ENV, "").strip()
+    if not log_path:
+        return
+    try:
+        with open(log_path, "a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+    except Exception:
+        pass
+
+
+_debug(f"module_loaded has_qt={_HAS_QT} qt_api={_QT_API}", node=None)
+if _HAS_QT:
+    _debug(
+        "enum_resolution "
+        f"left={_LeftButton is not None} right={_RightButton is not None} "
+        f"dash={_DashLine is not None} aa={_Antialiasing is not None}",
+        node=None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -172,20 +256,24 @@ def _defaults():
 # ---------------------------------------------------------------------------
 
 class _FallbackWidget:
-    def __init__(self, node):
+    def __init__(self, node, reason: str = ""):
         self._node = node
+        self._reason = reason
 
     def makeUI(self):
+        _debug(f"fallback.makeUI reason={self._reason or '<none>'}", node=self._node)
         if _HAS_QT:
             try:
                 w = QWidget()
                 w.setMinimumHeight(2)
                 return w
-            except Exception:
+            except Exception as exc:
+                _debug("fallback.makeUI failed", node=self._node, error=exc)
                 return None
         return None
 
     def updateValue(self):
+        _debug(f"fallback.updateValue reason={self._reason or '<none>'}", node=self._node)
         return None
 
 
@@ -195,6 +283,50 @@ class _FallbackWidget:
 
 if _HAS_QT:
 
+    class _ProbeWidget(QWidget):
+        """Minimal QWidget for crash bisection (no painting, no input)."""
+
+        def __init__(self, node) -> None:
+            super().__init__()
+            self._node = node
+            self.setMinimumHeight(36)
+            _debug("probe_widget.init", node=self._node)
+
+        def makeUI(self):
+            _debug("probe_widget.makeUI", node=self._node)
+            return self
+
+        def updateValue(self):
+            _debug("probe_widget.updateValue", node=self._node)
+            return None
+
+    class _PaintWidget(_ProbeWidget):
+        """Draw-only widget for bisection (no data writes, no mouse handling)."""
+
+        def __init__(self, node) -> None:
+            super().__init__(node)
+            self.setMinimumHeight(220)
+            self.setToolTip("Diagnostic paint-only mode for crash isolation.")
+            _debug("paint_widget.init", node=self._node)
+
+        def sizeHint(self):
+            return QSize(420, 220)
+
+        def paintEvent(self, _ev):
+            try:
+                p = QPainter(self)
+                p.fillRect(self.rect(), QColor("#202326"))
+                plot = QRectF(24.0, 12.0, max(10.0, self.width() - 48.0), max(10.0, self.height() - 24.0))
+                grad = QLinearGradient(plot.left(), plot.top(), plot.right(), plot.top())
+                for pos, col in _RAINBOW_STOPS:
+                    grad.setColorAt(pos, QColor(col))
+                p.fillRect(plot, grad)
+                p.setPen(QPen(QColor(255, 255, 255, 70), 1.0))
+                p.drawRect(plot)
+                p.end()
+            except Exception as exc:
+                _debug("paint_widget.paintEvent failed", node=self._node, error=exc)
+
     class HueCurveWidget(QWidget):
         """PyCustom_Knob widget.  ``makeUI()`` returns ``self``.
 
@@ -203,54 +335,79 @@ if _HAS_QT:
         collector cannot destroy it prematurely.
         """
 
-        def __init__(self, node) -> None:
+        def __init__(
+            self,
+            node,
+            *,
+            allow_edit: bool = True,
+            push_to_huecorrect: bool = True,
+            show_reset_button: bool = True,
+        ) -> None:
             super().__init__()
             self._node = node
             self._points = _defaults()
             self._drag_idx = None  # type: Optional[int]
             self._updating = False
+            self._allow_edit = allow_edit
+            self._push_to_huecorrect = push_to_huecorrect
+            self._show_reset_button = show_reset_button
+            _debug(
+                "widget.init "
+                f"allow_edit={self._allow_edit} "
+                f"push={self._push_to_huecorrect} "
+                f"reset_btn={self._show_reset_button}",
+                node=self._node,
+            )
 
             # --- Layout ------------------------------------------------
             self.setMinimumHeight(220)
-            self.setToolTip(
-                "Left-click: add/drag point | Right-click: remove "
-                "| Double-click: reset to neutral (Y=1)"
-            )
+            if self._allow_edit:
+                self.setToolTip(
+                    "Left-click: add/drag point | Right-click: remove "
+                    "| Double-click: reset to neutral (Y=1)"
+                )
+            else:
+                self.setToolTip("Read-only diagnostic mode (editing disabled).")
             try:
                 if _SizeExpanding is not None:
                     self.setSizePolicy(_SizeExpanding, _SizeExpanding)
-            except Exception:
+            except Exception as exc:
+                _debug("widget.setSizePolicy failed", node=self._node, error=exc)
                 pass
             self.setMouseTracking(True)
 
-            # Reset button lives in a layout over the paint area
-            layout = QVBoxLayout(self)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.addStretch(1)
-            btn_row = QHBoxLayout()
-            btn_row.addStretch(1)
-            self._reset_btn = QPushButton("Reset")
-            self._reset_btn.clicked.connect(self._reset_curve)
-            btn_row.addWidget(self._reset_btn)
-            layout.addLayout(btn_row)
+            if self._show_reset_button:
+                # Reset button lives in a layout over the paint area
+                layout = QVBoxLayout(self)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.addStretch(1)
+                btn_row = QHBoxLayout()
+                btn_row.addStretch(1)
+                self._reset_btn = QPushButton("Reset")
+                self._reset_btn.clicked.connect(self._reset_curve)
+                btn_row.addWidget(self._reset_btn)
+                layout.addLayout(btn_row)
 
         # ---- PyCustom_Knob protocol ----
 
         def makeUI(self):
             """Return self — the canonical pattern Nuke expects."""
+            _debug("widget.makeUI", node=self._node)
             self.updateValue()
             return self
 
         def updateValue(self):
             """Called by Nuke when the panel opens or knob values change."""
+            _debug("widget.updateValue.start", node=self._node)
             self._updating = True
             try:
                 self._points = self._load_points()
                 self.update()
-            except Exception:
-                pass
+            except Exception as exc:
+                _debug("widget.updateValue failed", node=self._node, error=exc)
             finally:
                 self._updating = False
+                _debug("widget.updateValue.end", node=self._node)
 
         # ---- Geometry helpers ----
 
@@ -318,8 +475,10 @@ if _HAS_QT:
         def _commit(self):
             """Normalize, save, push to HueCorrect, repaint."""
             self._points = _normalize(self._points)
-            self._save_points()
-            self._push_huecorrect()
+            if self._allow_edit:
+                self._save_points()
+            if self._allow_edit and self._push_to_huecorrect:
+                self._push_huecorrect()
             self.update()
 
         # ---- Paint ----
@@ -327,12 +486,14 @@ if _HAS_QT:
         def paintEvent(self, _ev):
             try:
                 self._paint()
-            except Exception:
+            except Exception as exc:
+                _debug("widget.paintEvent failed", node=self._node, error=exc)
                 try:
                     p = QPainter(self)
                     p.fillRect(self.rect(), QColor("#202326"))
                     p.end()
-                except Exception:
+                except Exception as fallback_exc:
+                    _debug("widget.paintEvent fallback failed", node=self._node, error=fallback_exc)
                     pass
 
         def _paint(self):
@@ -405,9 +566,11 @@ if _HAS_QT:
 
         def mousePressEvent(self, ev):
             try:
+                if not self._allow_edit:
+                    return
                 self._on_press(ev)
-            except Exception:
-                pass
+            except Exception as exc:
+                _debug("widget.mousePressEvent failed", node=self._node, error=exc)
 
         def _on_press(self, ev):
             btn = ev.button()
@@ -440,12 +603,15 @@ if _HAS_QT:
 
         def mouseMoveEvent(self, ev):
             try:
+                if not self._allow_edit:
+                    return
                 if self._drag_idx is None:
                     return
                 x, y = self._from_canvas(self._event_pos(ev))
                 self._move_point(self._drag_idx, x, y)
                 self._commit()
-            except Exception:
+            except Exception as exc:
+                _debug("widget.mouseMoveEvent failed", node=self._node, error=exc)
                 self._drag_idx = None
 
         def mouseReleaseEvent(self, _ev):
@@ -453,6 +619,8 @@ if _HAS_QT:
 
         def mouseDoubleClickEvent(self, ev):
             try:
+                if not self._allow_edit:
+                    return
                 if ev.button() != _LeftButton:
                     return
                 idx = self._hit(self._event_pos(ev))
@@ -460,8 +628,8 @@ if _HAS_QT:
                     return
                 self._move_point(idx, self._points[idx][0], 1.0)
                 self._commit()
-            except Exception:
-                pass
+            except Exception as exc:
+                _debug("widget.mouseDoubleClickEvent failed", node=self._node, error=exc)
 
         # ---- Knob I/O ----
 
@@ -480,7 +648,8 @@ if _HAS_QT:
                     raw = str(knob.value() or "")
                     if raw.strip():
                         return _normalize(json.loads(raw))
-                except Exception:
+                except Exception as exc:
+                    _debug("widget._load_points json parse failed", node=self._node, error=exc)
                     pass
             # Legacy: migrate from HueCorrect sat curve
             if _hcd is not None and self._node is not None:
@@ -491,7 +660,8 @@ if _HAS_QT:
                         legacy = _hcd.parse_hue_script_points(hk.toScript())
                         if legacy and len(legacy) >= 2:
                             return legacy
-                except Exception:
+                except Exception as exc:
+                    _debug("widget._load_points legacy migration failed", node=self._node, error=exc)
                     pass
             return _defaults()
 
@@ -503,8 +673,8 @@ if _HAS_QT:
                 return
             try:
                 knob.setValue(_hcd.points_to_json(self._points))
-            except Exception:
-                pass
+            except Exception as exc:
+                _debug("widget._save_points failed", node=self._node, error=exc)
 
         def _push_huecorrect(self):
             if self._node is None or _hcd is None:
@@ -515,15 +685,17 @@ if _HAS_QT:
                 if hk is None:
                     return
                 hk.fromScript(_hcd.points_to_hue_script(self._points))
-            except Exception:
-                pass
+            except Exception as exc:
+                _debug("widget._push_huecorrect failed", node=self._node, error=exc)
 
         def _reset_curve(self):
             try:
+                if not self._allow_edit:
+                    return
                 self._points = _defaults()
                 self._commit()
-            except Exception:
-                pass
+            except Exception as exc:
+                _debug("widget._reset_curve failed", node=self._node, error=exc)
 
 
 # ---------------------------------------------------------------------------
@@ -532,22 +704,38 @@ if _HAS_QT:
 
 def create_widget(node):
     """Entrypoint called by PyCustom_Knob command string."""
-    if os.environ.get("OKLCH_DISABLE_HUE_CURVE_WIDGET", "").strip().lower() in (
-        "1", "true", "yes",
-    ):
-        return _FallbackWidget(node)
+    if _is_truthy(os.environ.get("OKLCH_DISABLE_HUE_CURVE_WIDGET", "")):
+        return _FallbackWidget(node, reason="OKLCH_DISABLE_HUE_CURVE_WIDGET")
 
     if not _HAS_QT:
-        return _FallbackWidget(node)
+        return _FallbackWidget(node, reason="qt_unavailable")
 
     if nuke is not None:
         try:
             if not nuke.GUI():
-                return _FallbackWidget(node)
-        except Exception:
+                return _FallbackWidget(node, reason="non_gui_session")
+        except Exception as exc:
+            _debug("create_widget nuke.GUI check failed", node=node, error=exc)
             pass
 
+    mode = _widget_mode()
+    _debug(f"create_widget mode={mode}", node=node)
+    if mode == "off":
+        return _FallbackWidget(node, reason=f"{_WIDGET_MODE_ENV}=off")
+
     try:
+        if mode == "probe":
+            return _ProbeWidget(node)
+        if mode == "paint":
+            return _PaintWidget(node)
+        if mode == "readonly":
+            return HueCurveWidget(
+                node,
+                allow_edit=False,
+                push_to_huecorrect=False,
+                show_reset_button=False,
+            )
         return HueCurveWidget(node)
-    except Exception:
-        return _FallbackWidget(node)
+    except Exception as exc:
+        _debug("create_widget failed, falling back", node=node, error=exc)
+        return _FallbackWidget(node, reason="widget_construction_failed")

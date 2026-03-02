@@ -6,6 +6,7 @@ wrapped in top-level try/except so that a callback failure never crashes Nuke.
 
 from __future__ import annotations
 
+from datetime import datetime
 import os
 from typing import Optional
 
@@ -57,6 +58,53 @@ except Exception:
 _in_callback = False
 
 _KERNEL_SOURCE_RELATIVE = os.path.join("blink", "oklch_grade_kernel.cpp")
+_DEBUG_ENV = "OKLCH_GRADE_DEBUG"
+_DEBUG_LOG_ENV = "OKLCH_GRADE_DEBUG_LOG"
+
+
+def _is_truthy(value: str) -> bool:
+    return str(value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _debug_enabled() -> bool:
+    return _is_truthy(os.environ.get(_DEBUG_ENV, ""))
+
+
+def _node_name(node: Optional[nuke.Node]) -> str:
+    if node is None:
+        return "<none>"
+    try:
+        return str(node.fullName())
+    except Exception:
+        try:
+            return str(node.name())
+        except Exception:
+            return "<unknown>"
+
+
+def _debug(message: str, *, node: Optional[nuke.Node] = None, error: Optional[Exception] = None) -> None:
+    if not _debug_enabled():
+        return
+    ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    line = f"[{ts}] pid={os.getpid()} node={_node_name(node)} {message}"
+    if error is not None:
+        line += f" error={error!r}"
+    try:
+        if hasattr(nuke, "tprint"):
+            nuke.tprint(f"[OKLCH Callbacks] {line}")
+        else:
+            print(f"[OKLCH Callbacks] {line}")
+    except Exception:
+        pass
+
+    log_path = os.environ.get(_DEBUG_LOG_ENV, "").strip()
+    if not log_path:
+        return
+    try:
+        with open(log_path, "a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+    except Exception:
+        pass
 
 
 def _nuke_major_version() -> int:
@@ -64,6 +112,9 @@ def _nuke_major_version() -> int:
         return int(getattr(nuke, "NUKE_VERSION_MAJOR", 0))
     except Exception:
         return 0
+
+
+_debug(f"module_loaded nuke_major={_nuke_major_version()}", node=None)
 
 
 def _knob(node: Optional[nuke.Node], name: str):
@@ -151,8 +202,10 @@ def _run_recompile(blink: Optional[nuke.Node]) -> None:
         return
     try:
         recompile.execute()
-    except Exception:
+        _debug("blink.recompile executed", node=blink)
+    except Exception as exc:
         # Keep panel responsive even if compile fails.
+        _debug("blink.recompile failed", node=blink, error=exc)
         pass
 
 
@@ -184,7 +237,9 @@ def _run_reload_kernel_source_file(blink: Optional[nuke.Node]) -> None:
         return
     try:
         reload_knob.execute()
-    except Exception:
+        _debug("blink.reloadKernelSourceFile executed", node=blink)
+    except Exception as exc:
+        _debug("blink.reloadKernelSourceFile failed", node=blink, error=exc)
         pass
 
 
@@ -324,6 +379,7 @@ def _needs_legacy_recompile(blink: Optional[nuke.Node]) -> bool:
 
 def _prepare_blink_params(node: Optional[nuke.Node], force_recompile: bool) -> tuple[Optional[nuke.Node], list[str]]:
     """Ensure Blink param knobs exist before linking group knobs."""
+    _debug(f"prepare_blink_params start force_recompile={force_recompile}", node=node)
     if node is None:
         return None, [internal_name for _, _, internal_name, _ in _PARAM_LINKS]
 
@@ -333,6 +389,7 @@ def _prepare_blink_params(node: Optional[nuke.Node], force_recompile: bool) -> t
 
     kernel_path = _find_kernel_absolute_path()
     if not kernel_path:
+        _debug("prepare_blink_params missing kernel path", node=node)
         _set_status(
             node,
             (
@@ -351,6 +408,10 @@ def _prepare_blink_params(node: Optional[nuke.Node], force_recompile: bool) -> t
         if _set_kernel_source_inline_from_file(blink):
             _run_recompile(blink)
         missing = _missing_param_knobs(blink)
+        _debug(
+            f"prepare_blink_params legacy_mode missing={len(missing)}",
+            node=node,
+        )
         return blink, missing
 
     # Nuke >= 16: file-mode path works reliably.
@@ -367,6 +428,7 @@ def _prepare_blink_params(node: Optional[nuke.Node], force_recompile: bool) -> t
                 "</small></font>"
             ),
         )
+        _debug("prepare_blink_params kernel file mode mismatch", node=node)
         return blink, [internal_name for _, _, internal_name, _ in _PARAM_LINKS]
 
     if kernel_file_changed or force_recompile:
@@ -374,6 +436,10 @@ def _prepare_blink_params(node: Optional[nuke.Node], force_recompile: bool) -> t
         _run_recompile(blink)
 
     missing = _missing_param_knobs(blink)
+    _debug(
+        f"prepare_blink_params done kernel_changed={kernel_file_changed} missing={len(missing)}",
+        node=node,
+    )
 
     return blink, missing
 
@@ -466,6 +532,7 @@ def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
 
     blink = node.node("BlinkScript_OKLCHGrade")
     if blink is None:
+        _debug("sync_hue_lut_state skipped: missing BlinkScript node", node=node)
         return
 
     expr = node.node("Expression_HueRamp")
@@ -525,6 +592,10 @@ def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
                     "</small></font>"
                 ),
             )
+    _debug(
+        f"sync_hue_lut_state width={width} connected={connected} curves_requested={curves_requested}",
+        node=node,
+    )
 
 
 def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
@@ -538,6 +609,7 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
             node,
             "<font color='#cc6666'><small><b>Status:</b> BlinkScript node not ready yet.</small></font>",
         )
+        _debug("sync_links: blink not ready", node=node)
         return len(_PARAM_LINKS)
 
     if missing:
@@ -548,6 +620,7 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
                 f"{', '.join(missing[:6])}{'...' if len(missing) > 6 else ''}.</small></font>"
             ),
         )
+        _debug(f"sync_links: missing blink params count={len(missing)}", node=node)
         return len(_PARAM_LINKS)
 
     unresolved = 0
@@ -581,6 +654,7 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
         except Exception:
             unresolved += 1
 
+    _debug(f"sync_links done unresolved={unresolved} force_recompile={force_recompile}", node=node)
     return unresolved
 
 
@@ -588,18 +662,22 @@ def initialize_this_node() -> None:
     """onCreate entrypoint — wrapped so exceptions never crash Nuke."""
     global _in_callback
     if _in_callback:
+        _debug("initialize_this_node skipped: re-entrant call")
         return
     _in_callback = True
     try:
+        _debug("initialize_this_node start")
         _initialize_this_node_impl()
-    except Exception:
-        pass
+    except Exception as exc:
+        _debug("initialize_this_node failed", error=exc)
     finally:
         _in_callback = False
+        _debug("initialize_this_node end")
 
 
 def _initialize_this_node_impl() -> None:
     node = nuke.thisNode()
+    _debug("initialize_impl start", node=node)
     _ensure_hue_lut_format()
     _apply_colorspace_defaults(node)
     unresolved = _sync_links(node, force_recompile=True)
@@ -619,6 +697,7 @@ def _initialize_this_node_impl() -> None:
                 "</small></font>"
             ).format(unresolved),
         )
+    _debug(f"initialize_impl end unresolved={unresolved}", node=node)
 
 
 def handle_this_knob_changed() -> None:
@@ -630,6 +709,7 @@ def handle_this_knob_changed() -> None:
     """
     global _in_callback
     if _in_callback:
+        _debug("handle_this_knob_changed skipped: re-entrant call")
         return
 
     # Filter: only react to knobs that actually need attention.
@@ -640,15 +720,18 @@ def handle_this_knob_changed() -> None:
         knob_name = ""
 
     if knob_name and knob_name not in _KNOBS_NEEDING_SYNC:
+        _debug(f"handle_this_knob_changed ignored knob={knob_name}")
         return
 
     _in_callback = True
     try:
+        _debug(f"handle_this_knob_changed processing knob={knob_name}")
         _handle_this_knob_changed_impl()
-    except Exception:
-        pass
+    except Exception as exc:
+        _debug("handle_this_knob_changed failed", error=exc)
     finally:
         _in_callback = False
+        _debug("handle_this_knob_changed end")
 
 
 def _handle_this_knob_changed_impl() -> None:
@@ -657,3 +740,4 @@ def _handle_this_knob_changed_impl() -> None:
     if unresolved:
         _sync_links(node, force_recompile=True)
     _sync_hue_lut_state(node)
+    _debug(f"handle_impl unresolved={unresolved}", node=node)
