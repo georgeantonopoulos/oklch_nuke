@@ -132,6 +132,36 @@ class HueCurveEditorWindow(QDialog):
         )
         layout.addWidget(self._curve_widget, 1)
 
+    # ---- Eyedropper icon ----
+
+    @staticmethod
+    def _make_eyedropper_pixmap(size: int = 20, color: str = "#cccccc") -> QPixmap:
+        """Draw a simple eyedropper icon on a transparent pixmap."""
+        pm = QPixmap(size, size)
+        pm.fill(QColor(0, 0, 0, 0))
+        p = QPainter(pm)
+        try:
+            p.setRenderHint(QPainter.Antialiasing, True)
+            pen = QPen(QColor(color), 1.6)
+            p.setPen(pen)
+            # Dropper body (diagonal line)
+            p.drawLine(4, size - 4, size - 6, 6)
+            # Dropper tip (small triangle at bottom-left)
+            p.drawLine(2, size - 2, 4, size - 4)
+            p.drawLine(2, size - 2, 5, size - 1)
+            # Bulb at top-right
+            p.drawEllipse(size - 9, 1, 8, 8)
+        except Exception:
+            pass
+        finally:
+            p.end()
+        return pm
+
+    def _set_pick_icon(self, checked: bool = False) -> None:
+        color = "#ffcc33" if checked else "#cccccc"
+        pm = self._make_eyedropper_pixmap(20, color)
+        self._pick_btn.setIcon(QIcon(pm))
+
     # ---- Interactive hue picker ----
 
     def _toggle_pick_mode(self) -> None:
@@ -152,8 +182,8 @@ class HueCurveEditorWindow(QDialog):
             return
         self._picking = True
         self._pick_btn.setChecked(True)
-        self._pick_btn.setText("Ctrl+Click on Viewer...")
-        self._pick_status.setText("")
+        self._set_pick_icon(checked=True)
+        self._pick_status.setText("Ctrl+Click on Viewer...")
         # Register a global callback watching Viewer knob changes.
         # We store a reference to the bound method so we can remove it later.
         nuke.addKnobChanged(
