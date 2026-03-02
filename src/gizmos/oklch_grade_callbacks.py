@@ -50,6 +50,12 @@ _KNOBS_NEEDING_SYNC = frozenset({
     "showPanel",         # panel open — triggers updateValue on PyCustom widgets
 })
 
+# Lightweight knobs update runtime LUT state only (no compile/reload path).
+_LIGHTWEIGHT_SYNC_KNOBS = frozenset({
+    "hue_curves_enable",
+    "hue_curve_data",
+})
+
 try:
     import hue_curve_data as _hcd
 except Exception:
@@ -826,7 +832,7 @@ def handle_this_knob_changed() -> None:
     _in_callback = True
     try:
         _debug(f"handle_this_knob_changed processing knob={knob_name}", node=node_for_log)
-        _handle_this_knob_changed_impl(node_for_log)
+        _handle_this_knob_changed_impl(node_for_log, knob_name=knob_name)
     except Exception as exc:
         _debug("handle_this_knob_changed failed", node=node_for_log, error=exc)
     finally:
@@ -834,9 +840,14 @@ def handle_this_knob_changed() -> None:
         _debug("handle_this_knob_changed end", node=node_for_log)
 
 
-def _handle_this_knob_changed_impl(node: Optional[nuke.Node]) -> None:
+def _handle_this_knob_changed_impl(node: Optional[nuke.Node], knob_name: str = "") -> None:
+    if knob_name in _LIGHTWEIGHT_SYNC_KNOBS:
+        _sync_hue_lut_state(node)
+        _debug(f"handle_impl lightweight_sync knob={knob_name}", node=node)
+        return
+
     unresolved = _sync_links(node, force_recompile=False)
     if unresolved:
         _sync_links(node, force_recompile=True)
     _sync_hue_lut_state(node)
-    _debug(f"handle_impl unresolved={unresolved}", node=node)
+    _debug(f"handle_impl full_sync unresolved={unresolved} knob={knob_name}", node=node)
