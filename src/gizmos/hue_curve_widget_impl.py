@@ -126,6 +126,10 @@ _DEFAULT_POINTS = (
     (0.8333, 1.0),  # Magenta(300°)
     (1.0,    1.0),  # Red wrap(360°)
 )
+# X positions of the default hue landmarks — used to visually distinguish
+# default points from user-created ones.
+_DEFAULT_HUE_XS = frozenset(round(p[0], 4) for p in _DEFAULT_POINTS)
+_DEFAULT_HUE_TOLERANCE = 0.005  # ~1.8 deg
 
 _RAINBOW_STOPS = (
     (0.00, "#ff4d4d"), (0.08, "#ff7f4d"), (0.17, "#ffbf4d"),
@@ -514,13 +518,19 @@ if _HAS_QT:
                 p.setPen(QPen(QColor("#f5f7ff"), 2.0))
                 p.drawPath(path)
 
-                # Control points
+                # Control points — default landmarks are muted, user points are bright
                 for cx, cy in self._points:
                     cp = self._to_canvas(cx, cy)
+                    is_default = any(
+                        abs(cx - dx) < _DEFAULT_HUE_TOLERANCE for dx in _DEFAULT_HUE_XS
+                    )
                     p.setBrush(QColor("#121416"))
                     p.setPen(QPen(QColor("#f5f7ff"), 2.0))
                     p.drawEllipse(cp, _POINT_RADIUS + 1, _POINT_RADIUS + 1)
-                    p.setBrush(QColor("#75c7ff"))
+                    if is_default:
+                        p.setBrush(QColor("#8899aa"))  # muted grey-blue
+                    else:
+                        p.setBrush(QColor("#ff9933"))  # bright orange
                     p.drawEllipse(cp, _POINT_RADIUS - 1.5, _POINT_RADIUS - 1.5)
 
                 # X axis labels

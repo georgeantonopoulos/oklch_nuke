@@ -218,8 +218,8 @@ class HueCurveEditorWindow(QDialog):
         except Exception as exc:
             self._pick_status.setText(f"Pick failed: {exc}")
 
-        # Stay in picking mode so user can pick multiple hues.
-        # Press the button again (or close the window) to exit.
+        # Exit picking mode after one successful pick.
+        self._stop_picking()
 
     def showEvent(self, event):  # type: ignore[override]
         try:
