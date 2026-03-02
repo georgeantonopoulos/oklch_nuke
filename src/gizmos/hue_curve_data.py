@@ -127,10 +127,12 @@ def points_to_hue_script(points: list[tuple[float, float]]) -> str:
         y = clamp(catmull_rom_y(pts, x), 0.0, 2.0)
         tokens.append(f"x{x:.6f} {y:.6f}")
     curve_data = " ".join(tokens)
+    # HueCorrect's knob ``fromScript`` expects raw key/value list words
+    # (sat/lum/red/...) rather than one extra outer-braced word.
     return (
-        "{sat {curve " + curve_data + "}"
+        "sat {curve " + curve_data + "}"
         " lum {} red {} green {} blue {}"
-        " r_sup {} g_sup {} b_sup {} sat_thrsh {}}"
+        " r_sup {} g_sup {} b_sup {} sat_thrsh {}"
     )
 
 
