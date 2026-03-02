@@ -69,9 +69,8 @@ def normalize_points(
     return deduped
 
 
-def catmull_rom_y(points: list[tuple[float, float]], x: float) -> float:
-    """Evaluate Catmull-Rom spline Y at *x* through *points*."""
-    pts = normalize_points(points)
+def _catmull_rom_y_normalized(pts: list[tuple[float, float]], x: float) -> float:
+    """Evaluate Catmull-Rom spline Y at *x* through pre-normalized *pts*."""
     if x <= pts[0][0]:
         return pts[0][1]
     if x >= pts[-1][0]:
@@ -112,6 +111,15 @@ def catmull_rom_y(points: list[tuple[float, float]], x: float) -> float:
     return y
 
 
+def catmull_rom_y(points: list[tuple[float, float]], x: float) -> float:
+    """Evaluate Catmull-Rom spline Y at *x* through *points*.
+
+    Points are normalized defensively.  Use ``_catmull_rom_y_normalized``
+    when the caller has already validated the points list.
+    """
+    return _catmull_rom_y_normalized(normalize_points(points), x)
+
+
 def points_to_json(points: list[tuple[float, float]]) -> str:
     """Serialize control points to compact JSON for the hidden String_Knob."""
     payload = [[round(x, 6), round(y, 6)] for x, y in normalize_points(points)]
@@ -146,7 +154,7 @@ def points_to_lut_samples(
     out: list[tuple[float, float]] = []
     for index in range(count):
         x = index / float(count - 1)
-        y = clamp(catmull_rom_y(pts, x), 0.0, 2.0)
+        y = clamp(_catmull_rom_y_normalized(pts, x), 0.0, 2.0)
         out.append((x, y))
     return out
 

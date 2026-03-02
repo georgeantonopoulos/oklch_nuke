@@ -108,13 +108,6 @@ def open_for_node(node: Optional[nuke.Node]) -> None:
         nuke.message("Qt bindings are unavailable in this Nuke session.")
         return
 
-    try:
-        if node.Class() != "Group":
-            # Keep soft guard (gizmo class can vary between Group/Gizmo wrappers).
-            pass
-    except Exception:
-        pass
-
     key = _node_key(node)
     existing = _WINDOWS.get(key)
     if existing is not None:

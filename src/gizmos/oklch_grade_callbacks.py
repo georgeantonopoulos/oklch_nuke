@@ -71,7 +71,7 @@ _DEBUG_ENV = "OKLCH_GRADE_DEBUG"
 _DEBUG_LOG_ENV = "OKLCH_GRADE_DEBUG_LOG"
 _DEBUG_FILE = os.path.expanduser("~/.nuke/oklch_debug_on.txt")
 _DEBUG_DEFAULT_LOG = "/tmp/oklch_grade_callbacks.log"
-_DEBUG_ALWAYS = True
+_DEBUG_ALWAYS = False
 
 
 def _is_truthy(value: str) -> bool:
@@ -269,16 +269,27 @@ def _run_reload_kernel_source_file(blink: Optional[nuke.Node]) -> None:
         pass
 
 
+_kernel_path_cache: Optional[str] = None
+_kernel_path_cache_override: str = ""
+
+
 def _find_kernel_absolute_path() -> Optional[str]:
+    global _kernel_path_cache, _kernel_path_cache_override
     override = os.environ.get("OKLCH_GRADE_KERNEL_PATH", "").strip()
+    if override == _kernel_path_cache_override and _kernel_path_cache is not None:
+        return _kernel_path_cache
+    _kernel_path_cache_override = override
+
     if override and os.path.isfile(override):
-        return os.path.abspath(override)
+        _kernel_path_cache = os.path.abspath(override)
+        return _kernel_path_cache
 
     here = os.path.abspath(os.path.dirname(__file__))
     # callbacks.py lives in .../gizmos, kernel is in sibling ../blink
     candidate = os.path.normpath(os.path.join(here, "..", _KERNEL_SOURCE_RELATIVE))
     if os.path.isfile(candidate):
-        return candidate
+        _kernel_path_cache = candidate
+        return _kernel_path_cache
 
     # Fallback for installs where plugin paths vary (repo root, src, gizmos).
     for plugin_path in nuke.pluginPath() or []:
@@ -291,7 +302,8 @@ def _find_kernel_absolute_path() -> Optional[str]:
         for path in candidates:
             path = os.path.normpath(path)
             if os.path.isfile(path):
-                return path
+                _kernel_path_cache = path
+                return _kernel_path_cache
 
     return None
 

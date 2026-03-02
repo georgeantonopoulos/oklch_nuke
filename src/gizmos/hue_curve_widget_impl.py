@@ -150,13 +150,9 @@ def _node_name(node) -> str:
 
 def _widget_mode() -> str:
     raw = os.environ.get(_WIDGET_MODE_ENV, "full").strip().lower()
-    aliases = {
-        "interactive": "full",
-        "minimal": "probe",
-        "disabled": "off",
-    }
+    aliases = {"interactive": "full", "disabled": "off"}
     mode = aliases.get(raw, raw)
-    if mode not in ("off", "probe", "paint", "readonly", "full"):
+    if mode not in ("off", "readonly", "full"):
         return "full"
     return mode
 
@@ -232,7 +228,7 @@ def _normalize(points):
 
 def _catmull_y(points, x):
     if _hcd is not None:
-        return _hcd.catmull_rom_y(points, x)
+        return _hcd._catmull_rom_y_normalized(points, x)
     if not points:
         return 1.0
     for i in range(len(points) - 1):
@@ -282,50 +278,6 @@ class _FallbackWidget:
 # ---------------------------------------------------------------------------
 
 if _HAS_QT:
-
-    class _ProbeWidget(QWidget):
-        """Minimal QWidget for crash bisection (no painting, no input)."""
-
-        def __init__(self, node) -> None:
-            super().__init__()
-            self._node = node
-            self.setMinimumHeight(36)
-            _debug("probe_widget.init", node=self._node)
-
-        def makeUI(self):
-            _debug("probe_widget.makeUI", node=self._node)
-            return self
-
-        def updateValue(self):
-            _debug("probe_widget.updateValue", node=self._node)
-            return None
-
-    class _PaintWidget(_ProbeWidget):
-        """Draw-only widget for bisection (no data writes, no mouse handling)."""
-
-        def __init__(self, node) -> None:
-            super().__init__(node)
-            self.setMinimumHeight(220)
-            self.setToolTip("Diagnostic paint-only mode for crash isolation.")
-            _debug("paint_widget.init", node=self._node)
-
-        def sizeHint(self):
-            return QSize(420, 220)
-
-        def paintEvent(self, _ev):
-            try:
-                p = QPainter(self)
-                p.fillRect(self.rect(), QColor("#202326"))
-                plot = QRectF(24.0, 12.0, max(10.0, self.width() - 48.0), max(10.0, self.height() - 24.0))
-                grad = QLinearGradient(plot.left(), plot.top(), plot.right(), plot.top())
-                for pos, col in _RAINBOW_STOPS:
-                    grad.setColorAt(pos, QColor(col))
-                p.fillRect(plot, grad)
-                p.setPen(QPen(QColor(255, 255, 255, 70), 1.0))
-                p.drawRect(plot)
-                p.end()
-            except Exception as exc:
-                _debug("paint_widget.paintEvent failed", node=self._node, error=exc)
 
     class HueCurveWidget(QWidget):
         """PyCustom_Knob widget.  ``makeUI()`` returns ``self``.
@@ -472,6 +424,11 @@ if _HAS_QT:
             pts[idx] = (_clamp(x, left, right), y)
             self._points = pts
 
+        def _commit_visual(self):
+            """Normalize and repaint only — no knob writes (used during drag)."""
+            self._points = _normalize(self._points)
+            self.update()
+
         def _commit(self):
             """Normalize, save, push direct LUT expression, repaint."""
             self._points = _normalize(self._points)
@@ -610,12 +567,14 @@ if _HAS_QT:
                     return
                 x, y = self._from_canvas(self._event_pos(ev))
                 self._move_point(self._drag_idx, x, y)
-                self._commit()
+                self._commit_visual()
             except Exception as exc:
                 _debug("widget.mouseMoveEvent failed", node=self._node, error=exc)
                 self._drag_idx = None
 
         def mouseReleaseEvent(self, _ev):
+            if self._drag_idx is not None:
+                self._commit()
             self._drag_idx = None
 
         def mouseDoubleClickEvent(self, ev):
@@ -685,7 +644,6 @@ if _HAS_QT:
                 return
 
             blink = self._node.node("BlinkScript_OKLCHGrade")
-            lut_expr = self._node.node("Expression_HueRamp")
             expr = self._node.node("Expression_HueRamp")
             ocio_in = self._node.node("OCIOColorSpace_IN")
             if blink is None:
@@ -698,14 +656,14 @@ if _HAS_QT:
                 _debug("widget._sync_lut_runtime_state input0 wiring failed", node=self._node, error=exc)
 
             try:
-                if lut_expr is not None and blink.input(1) is not lut_expr:
-                    blink.setInput(1, lut_expr)
+                if expr is not None and blink.input(1) is not expr:
+                    blink.setInput(1, expr)
             except Exception as exc:
                 _debug("widget._sync_lut_runtime_state input1 wiring failed", node=self._node, error=exc)
 
             connected = False
             try:
-                connected = lut_expr is not None and blink.input(1) is lut_expr
+                connected = expr is not None and blink.input(1) is expr
             except Exception:
                 connected = False
 
@@ -842,10 +800,6 @@ def create_widget(node):
         return _FallbackWidget(node, reason=f"{_WIDGET_MODE_ENV}=off")
 
     try:
-        if mode == "probe":
-            return _ProbeWidget(node)
-        if mode == "paint":
-            return _PaintWidget(node)
         if mode == "readonly":
             return HueCurveWidget(
                 node,
