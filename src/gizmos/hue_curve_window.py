@@ -251,13 +251,6 @@ class HueCurveEditorWindow(QDialog):
             hue_deg = hue_x * 360.0
             self._curve_widget.add_point_at_hue(hue_x, 1.0)
             self._pick_status.setText(f"Added point at {hue_deg:.0f}\u00b0")
-            try:
-                nuke.tprint(
-                    f"[OKLCH HuePick] lin-sRGB ({r:.4f}, {g:.4f}, {b:.4f}) "
-                    f"-> hue {hue_deg:.1f}\u00b0, chroma={chroma:.6f}"
-                )
-            except Exception:
-                pass
         except Exception as exc:
             self._pick_status.setText(f"Pick failed: {exc}")
 

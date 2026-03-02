@@ -785,8 +785,6 @@ if _HAS_QT:
                     self._set_status(
                         "<font color='#cc6666'><small><b>Status:</b> Floating editor failed to apply direct LUT. Check Script Editor.</small></font>"
                     )
-                    if nuke is not None and hasattr(nuke, "tprint"):
-                        nuke.tprint(f"[OKLCH HueWidget] direct LUT update failure: {exc!r}")
                 except Exception:
                     pass
 
