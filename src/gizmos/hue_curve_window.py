@@ -141,7 +141,10 @@ class HueCurveEditorWindow(QDialog):
         pm.fill(QColor(0, 0, 0, 0))
         p = QPainter(pm)
         try:
-            p.setRenderHint(QPainter.Antialiasing, True)
+            try:
+                p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            except (AttributeError, TypeError):
+                p.setRenderHint(QPainter.Antialiasing, True)
             pen = QPen(QColor(color), 1.6)
             p.setPen(pen)
             # Dropper body (diagonal line)
@@ -194,7 +197,8 @@ class HueCurveEditorWindow(QDialog):
     def _stop_picking(self) -> None:
         self._picking = False
         self._pick_btn.setChecked(False)
-        self._pick_btn.setText("Pick Hue from Viewer")
+        self._set_pick_icon(checked=False)
+        self._pick_status.setText("")
         _unregister_picker(self)
 
     def _handle_viewer_sample(self) -> None:
