@@ -54,6 +54,7 @@ _KNOBS_NEEDING_SYNC = frozenset({
 _LIGHTWEIGHT_SYNC_KNOBS = frozenset({
     "hue_curves_enable",
     "hue_curve_data",
+    "showPanel",
 })
 
 try:
@@ -439,30 +440,36 @@ def _prepare_blink_params(node: Optional[nuke.Node], force_recompile: bool) -> t
         )
         return blink, missing
 
-    # Nuke >= 16: file-mode path works reliably.
+    # Nuke >= 16: prefer non-executing path unless param knobs are missing.
     kernel_file_changed = _set_kernel_source_file_absolute(blink)
     kernel_file_mode = _is_kernel_source_file_mode(blink, kernel_path)
     if not kernel_file_mode:
+        # Soft-fail: many deployments work via embedded kernelSource and still
+        # expose all param knobs correctly.
         current = _escape_html(_kernel_source_file_value(blink) or "<empty>")
         target = _escape_html(kernel_path)
-        _set_status(
-            node,
-            (
-                "<font color='#cc6666'><small><b>Status:</b> "
-                f"Could not set absolute kernelSourceFile. current={current} target={target}"
-                "</small></font>"
-            ),
+        _debug(
+            f"prepare_blink_params kernel file mode mismatch current={current} target={target}",
+            node=node,
         )
-        _debug("prepare_blink_params kernel file mode mismatch", node=node)
-        return blink, [internal_name for _, _, internal_name, _ in _PARAM_LINKS]
 
-    if kernel_file_changed or force_recompile:
-        _run_reload_kernel_source_file(blink)
+    missing_before = _missing_param_knobs(blink)
+    needs_compile = force_recompile or bool(missing_before)
+    if needs_compile:
+        if kernel_file_changed:
+            _run_reload_kernel_source_file(blink)
         _run_recompile(blink)
 
     missing = _missing_param_knobs(blink)
     _debug(
-        f"prepare_blink_params done kernel_changed={kernel_file_changed} missing={len(missing)}",
+        (
+            "prepare_blink_params done "
+            f"kernel_changed={kernel_file_changed} "
+            f"kernel_mode={kernel_file_mode} "
+            f"needs_compile={needs_compile} "
+            f"missing_before={len(missing_before)} "
+            f"missing_after={len(missing)}"
+        ),
         node=node,
     )
 
@@ -785,7 +792,7 @@ def _initialize_this_node_impl() -> None:
     _debug("initialize_impl start", node=node)
     _ensure_hue_lut_format()
     _apply_colorspace_defaults(node)
-    unresolved = _sync_links(node, force_recompile=True)
+    unresolved = _sync_links(node, force_recompile=False)
     if unresolved:
         # One more forced pass for legacy setups where params appear after
         # first compile/reload cycle.
