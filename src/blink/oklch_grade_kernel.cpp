@@ -140,10 +140,9 @@ param:
     return 0.5f * (1.0f + cos(pi * norm));
   }
 
-  // Sample the HueCorrect LUT and extract the sat curve value.
-  // The LUT input is an HSV rainbow (S=1, V=1) processed by HueCorrect.
-  // HueCorrect's sat curve uniformly scales RGB, so max(R,G,B) = sat_value
-  // (since input max was 1.0 for all fully saturated hues).
+  // Sample the direct hue LUT and extract its scalar value.
+  // The upstream Expression node writes a grayscale ramp where R=G=B=value.
+  // Taking max(R,G,B) therefore returns the authored LUT value.
   float sample_hue_lut_sat(float hue_deg) {
     float w = max(float(hue_lut_width), 2.0f);
     float norm = wrap_hue_deg(hue_deg) / 360.0f;
@@ -319,9 +318,8 @@ param:
         chroma_weight;
     total_hue_shift += hue_target_shift * target_weight;
 
-    // --- Hue Curves: per-hue hue shift from HueCorrect sat curve ---
-    // The LUT is an HSV rainbow processed by HueCorrect. The sat curve
-    // uniformly scales RGB, so max(R,G,B) = sat_value (input V was 1.0).
+    // --- Hue Curves: per-hue hue shift from the direct expression LUT ---
+    // LUT value encoding is scalar in [0..2] with neutral at 1.0.
     // Encoding: sat=1.0 -> 0 shift, sat=0.0 -> -180, sat=2.0 -> +180.
     if (hue_curves_enable && hue_lut_connected && hue_lut_width > 1) {
       float sat_value = sample_hue_lut_sat(current_lch.z);

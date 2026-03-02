@@ -57,7 +57,7 @@ class HueCurveEditorWindow(QDialog):
 
         info = QLabel(
             "Floating editor mode (Linux-safe): edits are written to "
-            "hue_curve_data and HueCorrect sat-curve in the node graph."
+            "hue_curve_data and directly to the 360x1 LUT expression."
         )
         info.setWordWrap(True)
         layout.addWidget(info)
@@ -67,7 +67,7 @@ class HueCurveEditorWindow(QDialog):
         self._curve_widget = _impl.HueCurveWidget(
             node,
             allow_edit=True,
-            push_to_huecorrect=True,
+            push_runtime_lut=True,
             show_reset_button=True,
         )
         layout.addWidget(self._curve_widget, 1)

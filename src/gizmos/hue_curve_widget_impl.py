@@ -340,7 +340,7 @@ if _HAS_QT:
             node,
             *,
             allow_edit: bool = True,
-            push_to_huecorrect: bool = True,
+            push_runtime_lut: bool = True,
             show_reset_button: bool = True,
         ) -> None:
             super().__init__()
@@ -349,12 +349,12 @@ if _HAS_QT:
             self._drag_idx = None  # type: Optional[int]
             self._updating = False
             self._allow_edit = allow_edit
-            self._push_to_huecorrect = push_to_huecorrect
+            self._push_runtime_lut = push_runtime_lut
             self._show_reset_button = show_reset_button
             _debug(
                 "widget.init "
                 f"allow_edit={self._allow_edit} "
-                f"push={self._push_to_huecorrect} "
+                f"push_runtime_lut={self._push_runtime_lut} "
                 f"reset_btn={self._show_reset_button}",
                 node=self._node,
             )
@@ -473,12 +473,13 @@ if _HAS_QT:
             self._points = pts
 
         def _commit(self):
-            """Normalize, save, push to HueCorrect, repaint."""
+            """Normalize, save, push direct LUT expression, repaint."""
             self._points = _normalize(self._points)
             if self._allow_edit:
                 self._save_points()
-            if self._allow_edit and self._push_to_huecorrect:
-                self._push_huecorrect()
+            if self._allow_edit and self._push_runtime_lut:
+                self._sync_lut_runtime_state()
+                self._push_direct_lut_expression()
             self.update()
 
         # ---- Paint ----
@@ -633,6 +634,15 @@ if _HAS_QT:
 
         # ---- Knob I/O ----
 
+        @staticmethod
+        def _node_knob(node, name):
+            if node is None:
+                return None
+            try:
+                return node.knob(name)
+            except Exception:
+                return None
+
         def _knob(self, name):
             if self._node is None:
                 return None
@@ -640,6 +650,86 @@ if _HAS_QT:
                 return self._node.knob(name)
             except Exception:
                 return None
+
+        def _set_status(self, html: str) -> None:
+            knob = self._knob("status_text")
+            if knob is None:
+                return
+            try:
+                knob.setValue(html)
+            except Exception:
+                pass
+
+        def _set_blink_param_if_exists(self, blink, internal_name: str, label: str, value) -> bool:
+            if blink is None:
+                return False
+            candidates = (
+                internal_name,
+                f"OKLCHGrade_{label}",
+                f"OKLCHGrade_{label.replace(' ', '_')}",
+            )
+            for name in candidates:
+                knob = self._node_knob(blink, name)
+                if knob is None:
+                    continue
+                try:
+                    knob.setValue(value)
+                    return True
+                except Exception:
+                    continue
+            return False
+
+        def _sync_lut_runtime_state(self) -> None:
+            """Ensure Blink input wiring + LUT params are valid during floating edits."""
+            if self._node is None:
+                return
+
+            blink = self._node.node("BlinkScript_OKLCHGrade")
+            lut_expr = self._node.node("Expression_HueRamp")
+            expr = self._node.node("Expression_HueRamp")
+            ocio_in = self._node.node("OCIOColorSpace_IN")
+            if blink is None:
+                return
+
+            try:
+                if ocio_in is not None and blink.input(0) is not ocio_in:
+                    blink.setInput(0, ocio_in)
+            except Exception as exc:
+                _debug("widget._sync_lut_runtime_state input0 wiring failed", node=self._node, error=exc)
+
+            try:
+                if lut_expr is not None and blink.input(1) is not lut_expr:
+                    blink.setInput(1, lut_expr)
+            except Exception as exc:
+                _debug("widget._sync_lut_runtime_state input1 wiring failed", node=self._node, error=exc)
+
+            connected = False
+            try:
+                connected = lut_expr is not None and blink.input(1) is lut_expr
+            except Exception:
+                connected = False
+
+            width = 360
+            try:
+                if expr is not None:
+                    width = max(int(expr.format().width()), 2)
+            except Exception:
+                width = 360
+
+            self._set_blink_param_if_exists(blink, "hue_lut_width", "Hue LUT Width", width)
+            self._set_blink_param_if_exists(blink, "hue_lut_connected", "Hue LUT Connected", connected)
+            self._set_blink_param_if_exists(blink, "hue_curves_enable", "Hue Curves Enable", True)
+
+            enable_knob = self._knob("hue_curves_enable")
+            if enable_knob is not None:
+                try:
+                    if not bool(enable_knob.value()):
+                        enable_knob.setValue(True)
+                except Exception:
+                    try:
+                        enable_knob.setValue(True)
+                    except Exception:
+                        pass
 
         def _load_points(self):
             knob = self._knob("hue_curve_data")
@@ -676,17 +766,45 @@ if _HAS_QT:
             except Exception as exc:
                 _debug("widget._save_points failed", node=self._node, error=exc)
 
-        def _push_huecorrect(self):
+        def _push_direct_lut_expression(self):
             if self._node is None or _hcd is None:
                 return
             try:
-                hc = self._node.node("HueCorrect_HueCurves")
-                hk = hc.knob("hue") if hc else None
-                if hk is None:
+                expr = self._node.node("Expression_HueRamp")
+                if expr is None:
+                    self._set_status(
+                        "<font color='#cc6666'><small><b>Status:</b> Floating editor: Expression_HueRamp node missing.</small></font>"
+                    )
                     return
-                hk.fromScript(_hcd.points_to_hue_script(self._points))
+                expr_lut = _hcd.points_to_lut_expression(self._points, x_var="lutx")
+                temp_name0 = self._node_knob(expr, "temp_name0")
+                temp_expr0 = self._node_knob(expr, "temp_expr0")
+                expr0 = self._node_knob(expr, "expr0")
+                expr1 = self._node_knob(expr, "expr1")
+                expr2 = self._node_knob(expr, "expr2")
+                if temp_name0 is not None:
+                    temp_name0.setValue("lutx")
+                if temp_expr0 is not None:
+                    temp_expr0.setValue("(x + 0.5) / width")
+                if expr0 is not None:
+                    expr0.setValue(expr_lut)
+                if expr1 is not None:
+                    expr1.setValue(expr_lut)
+                if expr2 is not None:
+                    expr2.setValue(expr_lut)
+                self._set_status(
+                    "<font color='#66AA66'><small><b>Status:</b> Floating editor updated direct hue LUT.</small></font>"
+                )
             except Exception as exc:
-                _debug("widget._push_huecorrect failed", node=self._node, error=exc)
+                _debug("widget._push_direct_lut_expression failed", node=self._node, error=exc)
+                try:
+                    self._set_status(
+                        "<font color='#cc6666'><small><b>Status:</b> Floating editor failed to apply direct LUT. Check Script Editor.</small></font>"
+                    )
+                    if nuke is not None and hasattr(nuke, "tprint"):
+                        nuke.tprint(f"[OKLCH HueWidget] direct LUT update failure: {exc!r}")
+                except Exception:
+                    pass
 
         def _reset_curve(self):
             try:
@@ -732,7 +850,7 @@ def create_widget(node):
             return HueCurveWidget(
                 node,
                 allow_edit=False,
-                push_to_huecorrect=False,
+                push_runtime_lut=False,
                 show_reset_button=False,
             )
         return HueCurveWidget(node)

@@ -136,6 +136,55 @@ def points_to_hue_script(points: list[tuple[float, float]]) -> str:
     )
 
 
+def points_to_lut_samples(
+    points: list[tuple[float, float]],
+    sample_count: int = _HUE_SAMPLE_COUNT,
+) -> list[tuple[float, float]]:
+    """Sample normalized control points into evenly spaced LUT values."""
+    pts = normalize_points(points)
+    count = max(int(sample_count), 2)
+    out: list[tuple[float, float]] = []
+    for index in range(count):
+        x = index / float(count - 1)
+        y = clamp(catmull_rom_y(pts, x), 0.0, 2.0)
+        out.append((x, y))
+    return out
+
+
+def samples_to_expression(samples: list[tuple[float, float]], x_var: str = "lutx") -> str:
+    """Convert sampled LUT points to nested ternary Expression-node syntax."""
+    if not samples:
+        return "1.0"
+    if len(samples) == 1:
+        return f"{samples[0][1]:.6f}"
+
+    pieces: list[str] = []
+    for idx in range(len(samples) - 1):
+        x0, y0 = samples[idx]
+        x1, y1 = samples[idx + 1]
+        dx = max(x1 - x0, _EPSILON)
+        slope = (y1 - y0) / dx
+        seg_expr = f"({y0:.6f} + ({x_var} - {x0:.6f}) * {slope:.6f})"
+        pieces.append(f"{x_var} < {x1:.6f} ? {seg_expr} : ")
+
+    return "".join(pieces) + f"{samples[-1][1]:.6f}"
+
+
+def points_to_lut_expression(
+    points: list[tuple[float, float]],
+    *,
+    x_var: str = "lutx",
+    sample_count: int = _HUE_SAMPLE_COUNT,
+) -> str:
+    """Build Expression-node formula for a direct grayscale hue LUT."""
+    samples = points_to_lut_samples(points, sample_count=sample_count)
+    core = samples_to_expression(samples, x_var=x_var)
+    return (
+        f"{x_var} <= 0.0 ? {samples[0][1]:.6f} : "
+        f"({x_var} >= 1.0 ? {samples[-1][1]:.6f} : ({core}))"
+    )
+
+
 def parse_hue_script_points(script: str) -> Optional[list[tuple[float, float]]]:
     """Extract control points from a HueCorrect sat-curve TCL script.
 

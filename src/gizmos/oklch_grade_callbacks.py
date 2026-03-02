@@ -7,6 +7,7 @@ wrapped in top-level try/except so that a callback failure never crashes Nuke.
 from __future__ import annotations
 
 from datetime import datetime
+import json
 import os
 from typing import Optional
 
@@ -43,6 +44,7 @@ _PARAM_LINKS = (
 # avoid expensive re-entrancy and unnecessary Blink recompiles.
 _KNOBS_NEEDING_SYNC = frozenset({
     "hue_curves_enable",
+    "hue_curve_data",
     "input_colorspace",
     "output_colorspace",
     "showPanel",         # panel open — triggers updateValue on PyCustom widgets
@@ -543,6 +545,54 @@ def _ensure_hue_curve_data(node: Optional[nuke.Node], huecorrect: Optional[nuke.
         pass
 
 
+def _apply_expression_lut_from_data(node: Optional[nuke.Node]) -> bool:
+    if node is None or _hcd is None:
+        return False
+    expr = node.node("Expression_HueRamp")
+    if expr is None:
+        return False
+
+    curve_data_knob = _knob(node, "hue_curve_data")
+    raw = ""
+    if curve_data_knob is not None:
+        try:
+            raw = str(curve_data_knob.value() or "")
+        except Exception:
+            raw = ""
+
+    points = None
+    if raw.strip():
+        try:
+            points = _hcd.normalize_points(json.loads(raw))
+        except Exception:
+            points = None
+    if not points:
+        points = list(_hcd._DEFAULT_POINTS)
+
+    expr_lut = _hcd.points_to_lut_expression(points, x_var="lutx")
+
+    try:
+        temp_name0 = _knob(expr, "temp_name0")
+        temp_expr0 = _knob(expr, "temp_expr0")
+        expr0 = _knob(expr, "expr0")
+        expr1 = _knob(expr, "expr1")
+        expr2 = _knob(expr, "expr2")
+        if temp_name0 is not None:
+            temp_name0.setValue("lutx")
+        if temp_expr0 is not None:
+            temp_expr0.setValue("(x + 0.5) / width")
+        if expr0 is not None:
+            expr0.setValue(expr_lut)
+        if expr1 is not None:
+            expr1.setValue(expr_lut)
+        if expr2 is not None:
+            expr2.setValue(expr_lut)
+        return True
+    except Exception as exc:
+        _debug("apply_expression_lut_from_data failed", node=node, error=exc)
+        return False
+
+
 def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
     if node is None:
         return
@@ -553,7 +603,7 @@ def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
         return
 
     expr = node.node("Expression_HueRamp")
-    lut = node.node("HueCorrect_HueCurves")
+    legacy_huecorrect = node.node("HueCorrect_HueCurves")
     ocio_in = node.node("OCIOColorSpace_IN")
 
     # Keep explicit input order stable in case legacy scripts lost input wiring.
@@ -563,8 +613,8 @@ def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
     except Exception:
         pass
     try:
-        if lut is not None and blink.input(1) is not lut:
-            blink.setInput(1, lut)
+        if expr is not None and blink.input(1) is not expr:
+            blink.setInput(1, expr)
     except Exception:
         pass
 
@@ -577,13 +627,14 @@ def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
 
     connected = False
     try:
-        connected = expr is not None and lut is not None and blink.input(1) is lut
+        connected = expr is not None and blink.input(1) is expr
     except Exception:
         connected = False
 
     _set_blink_param_if_exists(blink, "hue_lut_width", "Hue LUT Width", width)
     _set_blink_param_if_exists(blink, "hue_lut_connected", "Hue LUT Connected", connected)
-    _ensure_hue_curve_data(node, lut)
+    _ensure_hue_curve_data(node, legacy_huecorrect)
+    _apply_expression_lut_from_data(node)
 
     hue_curves_knob = _knob(node, "hue_curves_enable")
     curves_requested = False
@@ -592,6 +643,15 @@ def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
             curves_requested = bool(hue_curves_knob.value())
         except Exception:
             curves_requested = False
+
+    if connected:
+        # Re-assert enable state on Blink in case link expression is stale.
+        _set_blink_param_if_exists(
+            blink,
+            "hue_curves_enable",
+            "Hue Curves Enable",
+            curves_requested,
+        )
 
     if not connected:
         _set_blink_param_if_exists(blink, "hue_curves_enable", "Hue Curves Enable", False)
@@ -613,6 +673,28 @@ def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
         f"sync_hue_lut_state width={width} connected={connected} curves_requested={curves_requested}",
         node=node,
     )
+
+
+def _resolve_callback_node() -> Optional[nuke.Node]:
+    try:
+        node = nuke.thisNode()
+    except Exception:
+        node = None
+    if node is not None:
+        return node
+
+    # Some knobChanged invocations from floating UI arrive without thisNode.
+    # Fall back to selected node so hue_curve_data writes still sync runtime.
+    try:
+        selected = nuke.selectedNode()
+    except Exception:
+        selected = None
+    if selected is None:
+        return None
+
+    if _knob(selected, "hue_curve_data") is not None:
+        return selected
+    return None
 
 
 def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
@@ -736,23 +818,23 @@ def handle_this_knob_changed() -> None:
     except Exception:
         knob_name = ""
 
+    node_for_log = _resolve_callback_node()
     if knob_name and knob_name not in _KNOBS_NEEDING_SYNC:
-        _debug(f"handle_this_knob_changed ignored knob={knob_name}")
+        _debug(f"handle_this_knob_changed ignored knob={knob_name}", node=node_for_log)
         return
 
     _in_callback = True
     try:
-        _debug(f"handle_this_knob_changed processing knob={knob_name}")
-        _handle_this_knob_changed_impl()
+        _debug(f"handle_this_knob_changed processing knob={knob_name}", node=node_for_log)
+        _handle_this_knob_changed_impl(node_for_log)
     except Exception as exc:
-        _debug("handle_this_knob_changed failed", error=exc)
+        _debug("handle_this_knob_changed failed", node=node_for_log, error=exc)
     finally:
         _in_callback = False
-        _debug("handle_this_knob_changed end")
+        _debug("handle_this_knob_changed end", node=node_for_log)
 
 
-def _handle_this_knob_changed_impl() -> None:
-    node = nuke.thisNode()
+def _handle_this_knob_changed_impl(node: Optional[nuke.Node]) -> None:
     unresolved = _sync_links(node, force_recompile=False)
     if unresolved:
         _sync_links(node, force_recompile=True)

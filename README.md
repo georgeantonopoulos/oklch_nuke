@@ -200,7 +200,7 @@ is unstable in this environment.
 
 Current safe workflow:
 - Use **Open Floating Curve Editor** button in the Hue Curves tab for custom UI
-- Keep native `HueCorrect_HueCurves.hue` as an always-available fallback
+- Curve edits write directly to the internal 360x1 LUT expression consumed by BlinkScript
 
 Launch Nuke exactly as normal:
 
@@ -219,7 +219,7 @@ tail -n 200 /tmp/oklch_grade_callbacks.log
 
 Interpretation:
 1. If floating editor works and inline PyCustom does not, crash scope is PyCustom panel embedding on this stack.
-2. Native HueCorrect fallback remains available even if custom UI cannot be used.
+2. Direct LUT path avoids cross-space HueCorrect translation.
 
 ---
 
