@@ -8,6 +8,13 @@
 
 **Tech Stack:** PySide2 (bundled with Nuke), Nuke Python API (`PyCustom_Knob`, `String_Knob`), HueCorrect `fromScript()` API
 
+## Knowledge Graph Guardrails (from prior Nuke work)
+
+- Keep a single init strategy for this change-set: static `.gizmo` knobs + existing `initialize_this_node()` callback flow. Do not introduce global `addOnCreate` rewires.
+- Keep Blink linkage untouched and internal-name based (no label-based assumptions).
+- Validate in a fresh Nuke session (new-node path and script-load path), not only in a reused dev session.
+- Keep the widget module headless-safe (`nuke -t` / farm): guarded Qt imports and a no-op fallback widget.
+
 ---
 
 ## Data Flow
@@ -71,6 +78,7 @@ Create `src/gizmos/hue_curve_widget.py` containing:
 
 - `HueCurveWidget(QWidget)` — outer container with layout, Reset button, and PyCustom_Knob interface (`makeUI`, `updateValue`)
 - `_HueCurveCanvas(QWidget)` — inner widget with `paintEvent` (rainbow gradient, grid, Catmull-Rom spline, control points), mouse handlers (left-click add/drag, right-click delete, double-click reset-to-1.0)
+- Headless-safe import pattern: wrap PySide2 imports in `try/except` so module import stays valid in `nuke -t`
 - Coordinate mapping: X axis = hue [0..1] mapping to [0..360 deg], Y axis = curve value [0..2] where 1.0 = identity
 - `_RAINBOW_STOPS` — approximate OKLCH hue colors at ~30-degree intervals for the gradient background
 - `_evaluate_curve(x)` — Catmull-Rom interpolation through control points with mirrored tangents at endpoints
@@ -119,9 +127,9 @@ NEW:
 ```
  addUserKnob {20 hue_curves_tab l "Hue Curves"}
  addUserKnob {41 hue_curves_enable l "Enable Hue Curves" T "BlinkScript_OKLCHGrade.hue_curves_enable"}
- addUserKnob {26 hue_curves_help l "" +STARTLINE T "<small>Drag points to shift hue. Y=0 is identity. Left-click adds, right-click removes. Endpoints linked (hue wraps). Range: -180 to +180 degrees.</small>"}
+ addUserKnob {26 hue_curves_help l "" +STARTLINE T "<small>Drag points to shift hue. Y=1 is identity. Left-click adds, right-click removes. Endpoints linked (hue wraps). Range: -180 to +180 degrees.</small>"}
  addUserKnob {1 hue_curve_data l "" +INVISIBLE T ""}
- addUserKnob {12 hue_curve_widget l "" +STARTLINE T "hue_curve_widget.create_widget(nuke.thisNode())"}
+ addUserKnob {12 hue_curve_widget l "" +STARTLINE T "import hue_curve_widget; hue_curve_widget.create_widget(nuke.thisNode())"}
 ```
 
 Knob type 12 = `PyCustom_Knob`. The hidden `hue_curve_data` (type 1 = `String_Knob`) stores JSON.
@@ -173,9 +181,12 @@ Expected: `<function create_widget at 0x...>`
 **Files:**
 - Modify: `src/gizmos/oklch_grade_callbacks.py` (function `_sync_hue_lut_state`)
 
-**Step 1: Add default curve data initialization**
+**Step 1: Add default + migration initialization**
 
-In `_sync_hue_lut_state`, after existing code, add logic to populate `hue_curve_data` with default JSON `[[0.0, 1.0], [1.0, 1.0]]` if it's empty. This ensures new node instances have valid data.
+In `_sync_hue_lut_state`, after existing code, add logic for:
+
+1. If `hue_curve_data` is empty, attempt migration from existing `HueCorrect_HueCurves.hue` sat-curve keys (legacy scripts keep authored looks).
+2. If migration fails or no keys exist, populate `hue_curve_data` with default JSON `[[0.0, 1.0], [1.0, 1.0]]`.
 
 ```python
     curve_data_knob = _knob(node, "hue_curve_data")
@@ -184,19 +195,49 @@ In `_sync_hue_lut_state`, after existing code, add logic to populate `hue_curve_
             raw = curve_data_knob.value()
             if not raw or not raw.strip():
                 import json
-                curve_data_knob.setValue(json.dumps([[0.0, 1.0], [1.0, 1.0]]))
+                import re
+
+                migrated = None
+                hc = node.node("HueCorrect_HueCurves")
+                hue_knob = _knob(hc, "hue") if hc is not None else None
+                if hue_knob is not None:
+                    script = str(hue_knob.toScript() or "")
+                    pairs = re.findall(r"x([0-9]*\.?[0-9]+)\s+([0-9]*\.?[0-9]+)", script)
+                    if len(pairs) >= 2:
+                        migrated = []
+                        for x_text, y_text in pairs:
+                            x = max(0.0, min(1.0, float(x_text)))
+                            y = max(0.0, min(2.0, float(y_text)))
+                            migrated.append([x, y])
+                        migrated.sort(key=lambda p: p[0])
+
+                curve_data_knob.setValue(json.dumps(migrated or [[0.0, 1.0], [1.0, 1.0]]))
         except Exception:
             pass
 ```
 
 **Step 2: Test**
 
+1. New node default:
 ```python
 node = nuke.createNode("OKLCH_Grade", inpanel=False)
 print(node.knob("hue_curve_data").value())
 nuke.delete(node)
 ```
 Expected: `[[0.0, 1.0], [1.0, 1.0]]`
+
+2. Legacy migration:
+```python
+node = nuke.createNode("OKLCH_Grade", inpanel=False)
+hc = node.node("HueCorrect_HueCurves")
+hc.knob("hue").fromScript("{sat {curve x0.000000 1.000000 x0.500000 1.250000 x1.000000 1.000000} lum {} red {} green {} blue {} r_sup {} g_sup {} b_sup {} sat_thrsh {}}")
+node.knob("hue_curve_data").setValue("")
+import oklch_grade_callbacks as _okcb
+_okcb.handle_this_knob_changed()
+print(node.knob("hue_curve_data").value())
+nuke.delete(node)
+```
+Expected: JSON contains a midpoint near `[0.5, 1.25]` (legacy look preserved).
 
 **Step 3: Commit**
 
@@ -279,7 +320,7 @@ The Y axis should show: -180, -90, 0, +90, +180 (mapping from curve values 0, 0.
 
 **Step 2: Add tooltip**
 
-Add `self.setToolTip("Left-click: add/drag point | Right-click: remove point | Double-click: reset to zero")` in `__init__`.
+Add `self.setToolTip("Left-click: add/drag point | Right-click: remove point | Double-click: reset to neutral (Y=1.0)")` in `__init__`.
 
 **Step 3: Commit**
 
@@ -287,6 +328,42 @@ Add `self.setToolTip("Left-click: add/drag point | Right-click: remove point | D
 git add src/gizmos/hue_curve_widget.py
 git commit -m "polish: Y-axis degree labels and tooltip for hue curve widget"
 ```
+
+---
+
+### Task 8: Reliability validation pass (fresh session + headless)
+
+**Files:** None (manual test)
+
+**Step 1: Fresh GUI session smoke test**
+
+In a newly launched Nuke GUI session (not a reused one):
+
+```python
+node = nuke.createNode("OKLCH_Grade", inpanel=True)
+print(node.knob("status_text").value())
+```
+
+Expected: no red error status, Hue Curves widget appears, and no missing-link regressions.
+
+**Step 2: Script-load smoke test**
+
+1. Save a script containing an `OKLCH_Grade` node with custom curve points.
+2. Restart Nuke.
+3. Open script and verify:
+   - `hue_curve_data` still populated
+   - widget restores same points
+   - `debug_mode=5` still visualizes LUT changes
+
+**Step 3: Headless (`nuke -t`) smoke test**
+
+Run headless and verify no PySide2 import crash:
+
+```bash
+nuke -t -c "import nuke; n=nuke.createNode('OKLCH_Grade', inpanel=False); print('node_ok', bool(n)); print('curve_data', n.knob('hue_curve_data').value()); nuke.scriptClear()"
+```
+
+Expected: command completes, node creates, and `hue_curve_data` is readable without GUI.
 
 ---
 
@@ -301,3 +378,5 @@ git commit -m "polish: Y-axis degree labels and tooltip for hue curve widget"
 4. **Catmull-Rom overshoot** — Extreme control points can produce values outside [0, 2]. Clamp in `_push_curve_to_huecorrect()` (already planned). Consider visual clamping too.
 
 5. **Non-GUI sessions** — Render farms run Nuke in `-t` mode with no Qt. The `create_widget()` factory returns a no-op `_FallbackWidget`. HueCorrect still has its last-saved curve data, so renders work fine — only the interactive widget is missing.
+
+6. **Legacy script migration risk** — Existing `.nk` files may have authored `HueCorrect_HueCurves.hue` data but empty `hue_curve_data`. Migration must run only when JSON is empty and preserve authored looks.

@@ -33,6 +33,8 @@ _PARAM_LINKS = (
     ("debug_mode", "Debug Mode", "debug_mode", None),
 )
 
+import hue_curve_data as _hcd
+
 _KERNEL_SOURCE_RELATIVE = os.path.join("blink", "oklch_grade_kernel.cpp")
 
 
@@ -408,6 +410,33 @@ def _ensure_hue_lut_format() -> None:
         pass
 
 
+def _ensure_hue_curve_data(node: Optional[nuke.Node], huecorrect: Optional[nuke.Node]) -> None:
+    curve_data_knob = _knob(node, "hue_curve_data")
+    if curve_data_knob is None:
+        return
+
+    try:
+        raw = str(curve_data_knob.value() or "")
+    except Exception:
+        raw = ""
+    if raw.strip():
+        return
+
+    migrated = None
+    hue_knob = _knob(huecorrect, "hue")
+    if hue_knob is not None:
+        try:
+            migrated = _hcd.parse_hue_script_points(hue_knob.toScript())
+        except Exception:
+            migrated = None
+
+    points = migrated or list(_hcd._DEFAULT_POINTS)
+    try:
+        curve_data_knob.setValue(_hcd.points_to_json(points))
+    except Exception:
+        pass
+
+
 def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
     if node is None:
         return
@@ -447,6 +476,7 @@ def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
 
     _set_blink_param_if_exists(blink, "hue_lut_width", "Hue LUT Width", width)
     _set_blink_param_if_exists(blink, "hue_lut_connected", "Hue LUT Connected", connected)
+    _ensure_hue_curve_data(node, lut)
 
     hue_curves_knob = _knob(node, "hue_curves_enable")
     curves_requested = False
