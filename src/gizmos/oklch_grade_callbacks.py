@@ -417,7 +417,7 @@ def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
         return
 
     expr = node.node("Expression_HueRamp")
-    lut = node.node("ColorLookup_HueCurves")
+    lut = node.node("HueCorrect_HueCurves")
     ocio_in = node.node("OCIOColorSpace_IN")
 
     # Keep explicit input order stable in case legacy scripts lost input wiring.

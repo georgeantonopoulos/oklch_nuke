@@ -140,12 +140,16 @@ param:
     return 0.5f * (1.0f + cos(pi * norm));
   }
 
-  float3 sample_hue_lut(float hue_deg) {
+  // Sample the HueCorrect LUT and extract the sat curve value.
+  // The LUT input is an HSV rainbow (S=1, V=1) processed by HueCorrect.
+  // HueCorrect's sat curve uniformly scales RGB, so max(R,G,B) = sat_value
+  // (since input max was 1.0 for all fully saturated hues).
+  float sample_hue_lut_sat(float hue_deg) {
     float w = max(float(hue_lut_width), 2.0f);
     float norm = wrap_hue_deg(hue_deg) / 360.0f;
     float lut_x = norm * (w - 1.0f);
     float4 lut_val = bilinear(hueLUT, lut_x + 0.5f, 0.5f);
-    return float3(lut_val.x, lut_val.y, lut_val.z);
+    return max(lut_val.x, max(lut_val.y, lut_val.z));
   }
 
   // ---------------------------------------------------------------------------
@@ -272,15 +276,6 @@ param:
     if (graded_C < 0.0f)
       graded_C = 0.0f;
 
-    // --- Hue Curves: per-hue L/C multipliers ---
-    if (hue_curves_enable && hue_lut_connected && hue_lut_width > 1) {
-      float3 lut = sample_hue_lut(current_lch.z);
-      float l_curve_mult = lut.z * 2.0f; // Blue channel
-      float c_curve_mult = lut.y * 2.0f; // Green channel
-      graded_L = max(graded_L * l_curve_mult, 0.0f);
-      graded_C = max(graded_C * c_curve_mult, 0.0f);
-    }
-
     // --- Grade H ---
     // Feature 1: Chroma-based weight.
     // Below hue_chroma_threshold, all hue shifts fade to zero -- achromatic
@@ -324,10 +319,13 @@ param:
         chroma_weight;
     total_hue_shift += hue_target_shift * target_weight;
 
-    // --- Hue Curves: per-hue hue offset ---
+    // --- Hue Curves: per-hue hue shift from HueCorrect sat curve ---
+    // The LUT is an HSV rainbow processed by HueCorrect. The sat curve
+    // uniformly scales RGB, so max(R,G,B) = sat_value (input V was 1.0).
+    // Encoding: sat=1.0 -> 0 shift, sat=0.0 -> -180, sat=2.0 -> +180.
     if (hue_curves_enable && hue_lut_connected && hue_lut_width > 1) {
-      float3 lut = sample_hue_lut(orig_H);
-      float curve_hue_shift = (lut.x - 0.5f) * 360.0f; // Red channel
+      float sat_value = sample_hue_lut_sat(current_lch.z);
+      float curve_hue_shift = (sat_value - 1.0f) * 180.0f;
       total_hue_shift += curve_hue_shift * chroma_weight;
     }
 
@@ -352,12 +350,12 @@ param:
       dst() = float4(chroma_weight, chroma_weight, chroma_weight, src_pixel.w);
       return;
     }
-    if (debug_mode == 5) { // Hue Curves LUT values
+    if (debug_mode == 5) { // Hue Curves LUT sat value
       if (hue_curves_enable && hue_lut_connected && hue_lut_width > 1) {
-        float3 lut = sample_hue_lut(orig_H);
-        dst() = float4(lut.x, lut.y, lut.z, src_pixel.w);
+        float sat_val = sample_hue_lut_sat(orig_H);
+        dst() = float4(sat_val, sat_val, sat_val, src_pixel.w);
       } else {
-        dst() = float4(0.5f, 0.5f, 0.5f, src_pixel.w);
+        dst() = float4(1.0f, 1.0f, 1.0f, src_pixel.w);
       }
       return;
     }
