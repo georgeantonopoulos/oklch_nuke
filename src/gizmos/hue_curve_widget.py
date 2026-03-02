@@ -21,6 +21,7 @@ _WIDGET_DEBUG_LOG_ENV = "OKLCH_HUE_WIDGET_LOG"
 _WIDGET_MODE_FILE = os.path.expanduser("~/.nuke/oklch_hue_widget_mode.txt")
 _WIDGET_DEBUG_FILE = os.path.expanduser("~/.nuke/oklch_debug_on.txt")
 _WIDGET_DEFAULT_LOG = "/tmp/oklch_hue_widget.log"
+_WIDGET_DEBUG_ALWAYS = True
 
 
 class _FallbackWidget:
@@ -41,6 +42,8 @@ def _is_truthy(value: str) -> bool:
 
 
 def _debug_enabled() -> bool:
+    if _WIDGET_DEBUG_ALWAYS:
+        return True
     if _is_truthy(os.environ.get(_WIDGET_DEBUG_ENV, "")):
         return True
     try:
@@ -213,6 +216,18 @@ def create_widget(node):
     except Exception as exc:
         _debug("impl.create_widget failed", error=exc)
         return _FallbackWidget("impl_create_widget_failed")
+
+
+def create_probe_widget(node):
+    """Hard-wired minimal PyCustom probe for studio diagnostic runs."""
+    _debug("create_probe_widget start")
+    if nuke is not None:
+        try:
+            if not nuke.GUI():
+                return _FallbackWidget("non_gui_session")
+        except Exception as exc:
+            _debug("create_probe_widget nuke.GUI check failed", error=exc)
+    return _build_probe_widget(node)
 
 
 def __getattr__(name: str):

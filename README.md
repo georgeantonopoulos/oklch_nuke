@@ -195,10 +195,10 @@ Reference test vectors live in `tests/oklch_reference_test_vectors.md`. They cov
 
 ## Linux / Nuke16 Crash Isolation
 
-This diagnostic build removes the custom PyCustom Hue Curve widget and exposes
-the native `HueCorrect_HueCurves.hue` control directly.
+This diagnostic build reintroduces only a **minimal PyCustom probe widget**
+(`QWidget` subclass with no painting, no interaction, no data writes).
 
-No extra env vars, no `.nuke` setup, no Rez changes are required.
+No env vars, no `.nuke` setup, and no Rez changes are required.
 
 Launch Nuke exactly as normal:
 
@@ -216,8 +216,8 @@ tail -n 200 /tmp/oklch_grade_callbacks.log
 ```
 
 Interpretation:
-1. If Nuke still segfaults with this build, the crash is outside the custom Hue widget.
-2. If crash is gone, the custom PyCustom Hue widget path is the cause.
+1. If Nuke segfaults with this probe build, the PyCustom embedding/lifecycle path is the cause.
+2. If it does not segfault, the crash is in higher-level widget logic (paint/input/data sync).
 
 ---
 
