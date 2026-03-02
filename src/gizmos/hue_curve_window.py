@@ -102,7 +102,8 @@ class HueCurveEditorWindow(QDialog):
         # Eyedropper toolbar
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(0, 0, 0, 0)
-        self._pick_btn = QPushButton("\U0001f441\ufe0f Pick Hue")
+        # U+1F4A7 = droplet — renders reliably in Qt on all platforms
+        self._pick_btn = QPushButton("\U0001f4a7")
         self._pick_btn.setToolTip(
             "Click this button, then Ctrl-click a pixel in the Nuke viewer "
             "to add a control point at that pixel's hue."
