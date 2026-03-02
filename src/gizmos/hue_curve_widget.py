@@ -1,7 +1,11 @@
-"""Custom PySide2 hue-curve widget for OKLCH_Grade gizmo."""
+"""Custom Qt hue-curve widget for OKLCH_Grade gizmo.
+
+Supports both PySide6 (Nuke 16+) and PySide2 (Nuke 14-15).
+"""
 
 from __future__ import annotations
 
+import os
 from typing import Iterable, Optional
 
 import hue_curve_data as _hcd
@@ -11,20 +15,33 @@ try:
 except Exception:  # pragma: no cover - exercised in Nuke host only
     nuke = None
 
+# Nuke 16+ ships PySide6; Nuke 14/15 ship PySide2.
+_HAS_QT = False
 try:
-    from PySide2.QtCore import QPointF, QRectF, QSize, Qt, Signal
-    from PySide2.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen
-    from PySide2.QtWidgets import (
+    from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal  # type: ignore[import-untyped]
+    from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen  # type: ignore[import-untyped]
+    from PySide6.QtWidgets import (  # type: ignore[import-untyped]
         QHBoxLayout,
         QPushButton,
         QSizePolicy,
         QVBoxLayout,
         QWidget,
     )
-
     _HAS_QT = True
-except Exception:  # pragma: no cover - exercised in headless sessions
-    _HAS_QT = False
+except Exception:
+    try:
+        from PySide2.QtCore import QPointF, QRectF, QSize, Qt, Signal  # type: ignore[import-untyped,no-redef]
+        from PySide2.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen  # type: ignore[import-untyped,no-redef]
+        from PySide2.QtWidgets import (  # type: ignore[import-untyped,no-redef]
+            QHBoxLayout,
+            QPushButton,
+            QSizePolicy,
+            QVBoxLayout,
+            QWidget,
+        )
+        _HAS_QT = True
+    except Exception:  # pragma: no cover - headless sessions
+        pass
 
 
 _POINT_RADIUS = 5.0
@@ -55,6 +72,13 @@ class _FallbackWidget:
         self._node = node
 
     def makeUI(self):  # pragma: no cover - host integration only
+        if _HAS_QT:
+            try:
+                widget = QWidget()
+                widget.setMinimumHeight(2)
+                return widget
+            except Exception:
+                return None
         return None
 
     def updateValue(self):  # pragma: no cover - host integration only
@@ -113,6 +137,18 @@ if _HAS_QT:
                 if (dx * dx + dy * dy) <= (_HIT_RADIUS * _HIT_RADIUS):
                     return idx
             return None
+
+        def _event_pos(self, event) -> QPointF:
+            try:
+                return event.localPos()
+            except Exception:
+                pass
+            try:
+                return event.posF()
+            except Exception:
+                pass
+            point = event.pos()
+            return QPointF(point)
 
         def _emit_changed(self) -> None:
             self._points = _hcd.normalize_points(self._points)
@@ -196,7 +232,8 @@ if _HAS_QT:
             if event.button() not in (Qt.LeftButton, Qt.RightButton):
                 return
 
-            idx = self._hit_test(event.localPos())
+            pos = self._event_pos(event)
+            idx = self._hit_test(pos)
             if event.button() == Qt.RightButton:
                 if idx is not None and idx not in (0, len(self._points) - 1):
                     pts = list(self._points)
@@ -206,14 +243,14 @@ if _HAS_QT:
                 return
 
             if idx is None:
-                x, y = self._from_canvas(event.localPos())
+                x, y = self._from_canvas(pos)
                 pts = list(self._points)
                 insert_idx = 1
                 while insert_idx < len(pts) and pts[insert_idx][0] < x:
                     insert_idx += 1
                 pts.insert(insert_idx, (x, y))
                 self._points = _hcd.normalize_points(pts)
-                self._drag_index = self._hit_test(event.localPos())
+                self._drag_index = self._hit_test(pos)
                 self._emit_changed()
                 return
 
@@ -222,7 +259,7 @@ if _HAS_QT:
         def mouseMoveEvent(self, event) -> None:  # pragma: no cover - GUI behavior
             if self._drag_index is None:
                 return
-            x, y = self._from_canvas(event.localPos())
+            x, y = self._from_canvas(self._event_pos(event))
             self._move_point(self._drag_index, x, y)
             self._emit_changed()
 
@@ -232,56 +269,62 @@ if _HAS_QT:
         def mouseDoubleClickEvent(self, event) -> None:  # pragma: no cover - GUI behavior
             if event.button() != Qt.LeftButton:
                 return
-            idx = self._hit_test(event.localPos())
+            idx = self._hit_test(self._event_pos(event))
             if idx is None:
                 return
             x = self._points[idx][0]
             self._move_point(idx, x, 1.0)
             self._emit_changed()
 
-    class HueCurveWidget(QWidget):
-        """Outer PyCustom widget container."""
+    class HueCurveWidget:
+        """PyCustom wrapper object that builds/returns a QWidget in makeUI()."""
 
         def __init__(self, node) -> None:
-            super().__init__()
             self._node = node
             self._points: list[tuple[float, float]] = list(_hcd._DEFAULT_POINTS)
+            self._container: Optional[QWidget] = None
+            self._canvas: Optional[_HueCurveCanvas] = None
+            self._reset: Optional[QPushButton] = None
+            self._is_updating = False
 
-            root = QVBoxLayout(self)
+        def makeUI(self):  # pragma: no cover - host integration only
+            self._container = QWidget()
+            self._container.setMinimumHeight(220)
+            self._container.setToolTip(
+                "Left-click: add/drag point | Right-click: remove point | "
+                "Double-click: reset to neutral (Y=1.0)"
+            )
+
+            root = QVBoxLayout(self._container)
             root.setContentsMargins(0, 0, 0, 0)
             root.setSpacing(6)
 
-            self._canvas = _HueCurveCanvas(self)
+            self._canvas = _HueCurveCanvas(self._container)
             self._canvas.pointsChanged.connect(self._on_curve_changed)
             root.addWidget(self._canvas)
 
             buttons = QHBoxLayout()
             buttons.addStretch(1)
-            self._reset = QPushButton("Reset", self)
+            self._reset = QPushButton("Reset", self._container)
             self._reset.clicked.connect(self._reset_curve)
             buttons.addWidget(self._reset)
             root.addLayout(buttons)
 
-            self.setMinimumHeight(220)
-            self.setToolTip(
-                "Left-click: add/drag point | Right-click: remove point | "
-                "Double-click: reset to neutral (Y=1.0)"
-            )
-
             self.updateValue()
-
-        def sizeHint(self) -> QSize:  # pragma: no cover - GUI behavior
-            return QSize(420, 260)
-
-        def makeUI(self):  # pragma: no cover - host integration only
-            return self
+            return self._container
 
         def updateValue(self):  # pragma: no cover - host integration only
-            # Read-only: restore widget state from knob. Do NOT write back here —
-            # Nuke calls updateValue() on every panel open, so setValue() would
-            # pollute the undo stack and trigger unnecessary cooks.
-            self._points = self._load_points_from_knob()
-            self._canvas.set_points(self._points)
+            if self._canvas is None:
+                return
+            self._is_updating = True
+            try:
+                # Read-only: restore widget state from knob. Do NOT write back
+                # here — updateValue() can be called on panel opens and should
+                # not dirty scripts or trigger extra cooks.
+                self._points = self._load_points_from_knob()
+                self._canvas.set_points(self._points)
+            finally:
+                self._is_updating = False
 
         def _curve_data_knob(self):
             if self._node is None:
@@ -353,19 +396,25 @@ if _HAS_QT:
                     pass
 
         def _on_curve_changed(self, points: Iterable[Iterable[float]]) -> None:
+            if self._is_updating:
+                return
             self._points = _hcd.normalize_points(points)
             self._save_points_to_knob()
             self._push_curve_to_huecorrect()
 
         def _reset_curve(self) -> None:
             self._points = list(_hcd._DEFAULT_POINTS)
-            self._canvas.set_points(self._points)
+            if self._canvas is not None:
+                self._canvas.set_points(self._points)
             self._save_points_to_knob()
             self._push_curve_to_huecorrect()
 
 
 def create_widget(node):
     """Factory entrypoint used by PyCustom_Knob command strings."""
+    if os.environ.get("OKLCH_DISABLE_HUE_CURVE_WIDGET", "").strip() in ("1", "true", "TRUE", "yes", "YES"):
+        return _FallbackWidget(node)
+
     if not _HAS_QT:
         return _FallbackWidget(node)
 
