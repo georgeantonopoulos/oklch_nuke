@@ -7,10 +7,19 @@ This module has NO Qt or PySide2 dependency and is safe to import in headless
 from __future__ import annotations
 
 import json
+import math
 import re
 from typing import Iterable, Optional
 
-_DEFAULT_POINTS: tuple[tuple[float, float], ...] = ((0.0, 1.0), (1.0, 1.0))
+_DEFAULT_POINTS: tuple[tuple[float, float], ...] = (
+    (0.0,    1.0),  # Red      (0°)
+    (0.1667, 1.0),  # Yellow  (60°)
+    (0.3333, 1.0),  # Green  (120°)
+    (0.5,    1.0),  # Cyan   (180°)
+    (0.6667, 1.0),  # Blue   (240°)
+    (0.8333, 1.0),  # Magenta(300°)
+    (1.0,    1.0),  # Red wrap(360°)
+)
 _HUE_SAMPLE_COUNT = 37
 _EPSILON = 1e-6
 
@@ -206,3 +215,61 @@ def parse_hue_script_points(script: str) -> Optional[list[tuple[float, float]]]:
         return None
     parsed = [(float(x_raw), float(y_raw)) for x_raw, y_raw in pairs]
     return normalize_points(parsed)
+
+
+# ---------------------------------------------------------------------------
+# Linear-sRGB -> OKLCH conversion (mirrors oklch_grade_kernel.cpp exactly)
+# ---------------------------------------------------------------------------
+
+_CHROMA_FLOOR = 4e-6  # matches kernel: c <= 0.000004f
+
+
+def _signed_cbrt(x: float) -> float:
+    """Cube root preserving sign — mirrors kernel ``signed_cbrt()``."""
+    if x == 0.0:
+        return 0.0
+    return math.copysign(abs(x) ** (1.0 / 3.0), x)
+
+
+def linsrgb_to_oklch(r: float, g: float, b: float) -> tuple[float, float, float]:
+    """Convert linear-sRGB to OKLCH ``(L, C, H)``.
+
+    Uses the exact CSS Color 4 / Bjorn Ottosson matrices from
+    ``oklch_grade_kernel.cpp``.  *H* is in degrees ``[0, 360)``.
+    """
+    # linear_srgb_to_xyz
+    x = 0.4123907992659595 * r + 0.3575843393838780 * g + 0.1804807884018343 * b
+    y = 0.2126390058715104 * r + 0.7151686787677559 * g + 0.0721923153607337 * b
+    z = 0.0193308187155918 * r + 0.1191947797946260 * g + 0.9505321522496606 * b
+
+    # xyz_to_oklab
+    l = 0.8190224379967030 * x + 0.3619062600528904 * y + -0.1288737815209879 * z
+    m = 0.0329836539323885 * x + 0.9292868615863434 * y + 0.0361446663506424 * z
+    s = 0.0481771893596242 * x + 0.2642395317527308 * y + 0.6335478284694309 * z
+
+    l_ = _signed_cbrt(l)
+    m_ = _signed_cbrt(m)
+    s_ = _signed_cbrt(s)
+
+    L = 0.2104542683093140 * l_ + 0.7936177747023054 * m_ + -0.0040720430116193 * s_
+    a = 1.9779985324311684 * l_ + -2.4285922420485799 * m_ + 0.4505937096174110 * s_
+    b_val = 0.0259040424655478 * l_ + 0.7827717124575296 * m_ + -0.8086757549230774 * s_
+
+    # oklab_to_oklch
+    C = math.sqrt(a * a + b_val * b_val)
+    H = math.atan2(b_val, a) * 57.2957795131  # rad -> deg
+    if H < 0.0:
+        H += 360.0
+    if C <= _CHROMA_FLOOR:
+        H = 0.0
+
+    return (L, C, H)
+
+
+def linsrgb_to_hue_normalized(r: float, g: float, b: float) -> tuple[float, float]:
+    """Return ``(hue_x, chroma)`` from linear-sRGB.
+
+    *hue_x* is in ``[0.0, 1.0]``, suitable for the curve widget X axis.
+    """
+    _L, C, H = linsrgb_to_oklch(r, g, b)
+    return (H / 360.0, C)

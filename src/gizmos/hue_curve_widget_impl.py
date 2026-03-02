@@ -117,7 +117,15 @@ if _HAS_QT:
 _POINT_RADIUS = 5.0
 _HIT_RADIUS = 9.0
 _EPSILON = 1e-6
-_DEFAULT_POINTS = ((0.0, 1.0), (1.0, 1.0))
+_DEFAULT_POINTS = (
+    (0.0,    1.0),  # Red      (0°)
+    (0.1667, 1.0),  # Yellow  (60°)
+    (0.3333, 1.0),  # Green  (120°)
+    (0.5,    1.0),  # Cyan   (180°)
+    (0.6667, 1.0),  # Blue   (240°)
+    (0.8333, 1.0),  # Magenta(300°)
+    (1.0,    1.0),  # Red wrap(360°)
+)
 
 _RAINBOW_STOPS = (
     (0.00, "#ff4d4d"), (0.08, "#ff7f4d"), (0.17, "#ffbf4d"),
@@ -774,6 +782,28 @@ if _HAS_QT:
                 self._commit()
             except Exception as exc:
                 _debug("widget._reset_curve failed", node=self._node, error=exc)
+
+        def add_point_at_hue(self, hue_x: float, y: float = 1.0) -> None:
+            """Insert a control point at normalized hue position *hue_x*.
+
+            If a point already exists within ~1.8 deg, update it instead.
+            """
+            if not self._allow_edit:
+                return
+            hue_x = _clamp(hue_x, 0.0, 1.0)
+            y = _clamp(y, 0.0, 2.0)
+            for i, (px, _py) in enumerate(self._points):
+                if abs(px - hue_x) < 0.005:
+                    self._move_point(i, px, y)
+                    self._commit()
+                    return
+            pts = list(self._points)
+            ins = 1
+            while ins < len(pts) and pts[ins][0] < hue_x:
+                ins += 1
+            pts.insert(ins, (hue_x, y))
+            self._points = _normalize(pts)
+            self._commit()
 
 
 # ---------------------------------------------------------------------------

@@ -12,15 +12,20 @@ import nuke
 
 try:
     from PySide6.QtCore import Qt  # type: ignore[import-untyped]
-    from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout  # type: ignore[import-untyped]
+    from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout  # type: ignore[import-untyped]
     _HAS_QT = True
 except Exception:
     try:
         from PySide2.QtCore import Qt  # type: ignore[import-untyped,no-redef]
-        from PySide2.QtWidgets import QDialog, QLabel, QVBoxLayout  # type: ignore[import-untyped,no-redef]
+        from PySide2.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout  # type: ignore[import-untyped,no-redef]
         _HAS_QT = True
     except Exception:
         _HAS_QT = False
+
+try:
+    import hue_curve_data as _hcd
+except Exception:
+    _hcd = None  # type: ignore[assignment]
 
 _WINDOWS: Dict[str, QDialog] = {}
 
@@ -47,7 +52,7 @@ class HueCurveEditorWindow(QDialog):
         except Exception:
             title_name = "OKLCH_Grade"
 
-        self.setWindowTitle(f"OKLCH Hue Curve Editor - {title_name}")
+        self.setWindowTitle(f"Hue Shift Curve - {title_name}")
         self.setAttribute(Qt.WA_DeleteOnClose, True)
         self.resize(760, 420)
 
@@ -56,11 +61,24 @@ class HueCurveEditorWindow(QDialog):
         layout.setSpacing(8)
 
         info = QLabel(
-            "Floating editor mode (Linux-safe): edits are written to "
-            "hue_curve_data and directly to the 360x1 LUT expression."
+            "Drag points to shift hues across the colour wheel. "
+            "The dashed centre line is neutral (no shift)."
         )
         info.setWordWrap(True)
         layout.addWidget(info)
+
+        # Eyedropper toolbar
+        toolbar = QHBoxLayout()
+        toolbar.setContentsMargins(0, 0, 0, 0)
+        self._pick_btn = QPushButton("Pick Hue from Viewer")
+        self._pick_btn.setToolTip(
+            "Ctrl-click a pixel in the Nuke viewer, then press this button "
+            "to add a control point at that pixel's hue."
+        )
+        self._pick_btn.clicked.connect(self._pick_hue_from_viewer)
+        toolbar.addWidget(self._pick_btn)
+        toolbar.addStretch(1)
+        layout.addLayout(toolbar)
 
         import hue_curve_widget_impl as _impl
 
@@ -71,6 +89,78 @@ class HueCurveEditorWindow(QDialog):
             show_reset_button=True,
         )
         layout.addWidget(self._curve_widget, 1)
+
+    def _pick_hue_from_viewer(self) -> None:
+        """Sample viewer Ctrl-click position, convert to OKLCH hue, add point."""
+        if self._node is None:
+            nuke.message("No node attached to this editor.")
+            return
+        if _hcd is None or not hasattr(_hcd, "linsrgb_to_hue_normalized"):
+            nuke.message("hue_curve_data module missing OKLCH conversion support.")
+            return
+
+        # Get sample position from the viewer's last Ctrl-click
+        viewer = nuke.activeViewer()
+        if viewer is None:
+            nuke.message(
+                "No active viewer.\n\n"
+                "Ctrl-click on a pixel in the viewer first, then press Pick Hue."
+            )
+            return
+        viewer_node = viewer.node()
+        if viewer_node is None:
+            nuke.message("Cannot access viewer node.")
+            return
+        try:
+            bbox_knob = viewer_node.knob("colour_sample_bbox")
+            if bbox_knob is None:
+                nuke.message(
+                    "Viewer has no colour_sample_bbox.\n\n"
+                    "Ctrl-click on a pixel in the viewer first."
+                )
+                return
+            bbox = bbox_knob.value()
+            sample_x = (bbox[0] + bbox[2]) / 2.0
+            sample_y = (bbox[1] + bbox[3]) / 2.0
+        except Exception as exc:
+            nuke.message(f"Failed to read viewer sample position:\n{exc}")
+            return
+
+        # Sample linear-sRGB from OCIOColorSpace_IN output
+        ocio_in = self._node.node("OCIOColorSpace_IN")
+        if ocio_in is None:
+            nuke.message(
+                "Cannot find OCIOColorSpace_IN inside the gizmo.\n"
+                "The gizmo internals may be damaged."
+            )
+            return
+        try:
+            r = ocio_in.sample("red",   sample_x, sample_y)
+            g = ocio_in.sample("green", sample_x, sample_y)
+            b = ocio_in.sample("blue",  sample_x, sample_y)
+        except Exception as exc:
+            nuke.message(f"Failed to sample pixel:\n{exc}")
+            return
+
+        # Convert to OKLCH hue
+        hue_x, chroma = _hcd.linsrgb_to_hue_normalized(r, g, b)
+        if chroma < _hcd._CHROMA_FLOOR:
+            nuke.message(
+                "The sampled colour is near-neutral (very low chroma).\n\n"
+                "Hue is undefined for achromatic colours. "
+                "Try sampling a more saturated pixel."
+            )
+            return
+
+        hue_deg = hue_x * 360.0
+        self._curve_widget.add_point_at_hue(hue_x, 1.0)
+        try:
+            nuke.tprint(
+                f"[OKLCH HuePick] lin-sRGB ({r:.4f}, {g:.4f}, {b:.4f}) "
+                f"-> hue {hue_deg:.1f} deg, chroma={chroma:.6f}"
+            )
+        except Exception:
+            pass
 
     def showEvent(self, event):  # type: ignore[override]
         try:
