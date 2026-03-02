@@ -43,9 +43,8 @@ Gizmo {
  addUserKnob {20 hue_group_end n -1}
  addUserKnob {20 hue_curves_tab l "Hue Curves"}
  addUserKnob {41 hue_curves_enable l "Enable Hue Curves" T "BlinkScript_OKLCHGrade.hue_curves_enable"}
- addUserKnob {26 hue_curves_help l "" +STARTLINE T "<small>Drag points to shift hue. Y=1 is identity. Left-click adds, right-click removes. Endpoints linked (hue wraps). Range: -180 to +180 degrees.</small>"}
- addUserKnob {1 hue_curve_data l "" +INVISIBLE T ""}
- addUserKnob {12 hue_curve_widget l "" +STARTLINE T "import hue_curve_widget; hue_curve_widget.create_widget(nuke.thisNode())"}
+ addUserKnob {26 hue_curves_help l "" +STARTLINE T "<small>Diagnostic build: custom Hue Curves widget disabled. Using native HueCorrect sat-curve control for crash isolation.</small>"}
+ addUserKnob {41 hue_curves_lut l "Hue Curves" T HueCorrect_HueCurves.hue}
  addUserKnob {26 "" +STARTLINE}
  addUserKnob {41 mix l Mix R 0 1 T BlinkScript_OKLCHGrade.mix}
  addUserKnob {41 clamp_output l "Clamp Output" T "BlinkScript_OKLCHGrade.clamp_output"}

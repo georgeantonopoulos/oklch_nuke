@@ -195,58 +195,29 @@ Reference test vectors live in `tests/oklch_reference_test_vectors.md`. They cov
 
 ## Linux / Nuke16 Crash Isolation
 
-If Nuke 16 on Linux still crashes when opening the **Hue Curves** tab, you can
-strip the custom widget down in stages and enable logs:
+This diagnostic build removes the custom PyCustom Hue Curve widget and exposes
+the native `HueCorrect_HueCurves.hue` control directly.
+
+No extra env vars, no `.nuke` setup, no Rez changes are required.
+
+Launch Nuke exactly as normal:
 
 ```bash
-# Optional: capture Python callback + widget logs
-export OKLCH_GRADE_DEBUG=1
-export OKLCH_GRADE_DEBUG_LOG=/tmp/oklch_grade_callbacks.log
-export OKLCH_HUE_WIDGET_DEBUG=1
-export OKLCH_HUE_WIDGET_LOG=/tmp/oklch_hue_widget.log
-
-# Widget bisection mode:
-# off      -> no custom widget (fallback stub, no Qt import)
-# bare     -> raw QWidget only (no subclass, no paint/input)
-# probe    -> minimal QWidget subclass (no paint/input/data writes)
-# paint    -> paint-only diagnostic widget (no input/data writes)
-# readonly -> full curve render + data load, editing disabled
-# full     -> full interactive widget (default)
-export OKLCH_HUE_WIDGET_MODE=probe
+rez env nuke nuke_oklch==dev -- nuke
 ```
 
-If Rez is not passing env vars into Nuke reliably, use a mode file instead:
-
-```bash
-mkdir -p ~/.nuke
-echo probe > ~/.nuke/oklch_hue_widget_mode.txt
-```
-
-For logging without env vars, create this file once:
-
-```bash
-mkdir -p ~/.nuke
-touch ~/.nuke/oklch_debug_on.txt
-```
-
-Default logs will then be written to:
-- `/tmp/oklch_hue_widget.log`
+Callback diagnostics are always written to:
 - `/tmp/oklch_grade_callbacks.log`
 
-Recommended sequence:
-
-1. `off` — confirms the crash is inside custom PyCustom widget path.
-2. `bare` — isolates raw Qt widget creation.
-3. `probe` — isolates QWidget subclass lifecycle.
-4. `paint` — isolates paint path.
-5. `readonly` — isolates data-load path.
-6. `full` — isolates edit interactions / HueCorrect writes.
-
-Legacy hard disable still works:
+Inspect with:
 
 ```bash
-export OKLCH_DISABLE_HUE_CURVE_WIDGET=1
+tail -n 200 /tmp/oklch_grade_callbacks.log
 ```
+
+Interpretation:
+1. If Nuke still segfaults with this build, the crash is outside the custom Hue widget.
+2. If crash is gone, the custom PyCustom Hue widget path is the cause.
 
 ---
 

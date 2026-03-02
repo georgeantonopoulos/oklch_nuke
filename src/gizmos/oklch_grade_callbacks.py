@@ -62,6 +62,7 @@ _DEBUG_ENV = "OKLCH_GRADE_DEBUG"
 _DEBUG_LOG_ENV = "OKLCH_GRADE_DEBUG_LOG"
 _DEBUG_FILE = os.path.expanduser("~/.nuke/oklch_debug_on.txt")
 _DEBUG_DEFAULT_LOG = "/tmp/oklch_grade_callbacks.log"
+_DEBUG_ALWAYS = True
 
 
 def _is_truthy(value: str) -> bool:
@@ -69,6 +70,8 @@ def _is_truthy(value: str) -> bool:
 
 
 def _debug_enabled() -> bool:
+    if _DEBUG_ALWAYS:
+        return True
     if _is_truthy(os.environ.get(_DEBUG_ENV, "")):
         return True
     try:
