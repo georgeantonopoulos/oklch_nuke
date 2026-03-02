@@ -24,6 +24,10 @@ except Exception:
     except Exception:
         _HAS_QT = False
 
+if not _HAS_QT:
+    # Keep module importable in headless/non-Qt sessions.
+    QDialog = object  # type: ignore[assignment,misc]
+
 try:
     import hue_curve_data as _hcd
 except Exception:

@@ -81,29 +81,27 @@ These checks validate the internal `Expression_HueRamp -> ColorLookup_HueCurves 
 ### 1) Identity with curves enabled
 
 - Enable `hue_curves_enable`.
-- Keep `Hue Curves` red/green/blue channels flat at `0.5`.
+- Keep the hue-curve LUT flat at scalar `1.0` (identity).
 - Input: `(1.0, 0.0, 0.0, 1.0)`.
 - Expected: output ~= input within `max_abs_err <= 1e-5`.
 
 ### 2) Hue curve shift around red
 
-- In the red channel curve, set point near `x ~= 0.08` (about 29° hue) to `y ~= 0.75`.
+- Set point near `x ~= 0.08` (about 29° hue) to `y = 1.5`.
 - Input: `(1.0, 0.0, 0.0, 1.0)`.
 - Expected: hue rotates by about +90° while keeping alpha unchanged.
 
-### 3) Chroma curve suppression
+### 3) Negative hue shift around red
 
-- Reset red channel to `0.5`.
-- In green channel curve, set point near `x ~= 0.08` to `y = 0.0`.
+- Set point near `x ~= 0.08` to `y = 0.5`.
 - Input: `(1.0, 0.0, 0.0, 1.0)`.
-- Expected: chroma strongly reduced toward neutral; no NaN/Inf.
+- Expected: hue rotates by about -90° while keeping alpha unchanged.
 
-### 4) Lightness curve attenuation
+### 4) Max negative shift edge case
 
-- Reset green channel to `0.5`.
-- In blue channel curve, set point near `x ~= 0.08` to `y = 0.25`.
+- Set point near `x ~= 0.08` to `y = 0.0`.
 - Input: `(1.0, 0.0, 0.0, 1.0)`.
-- Expected: lightness decreases to roughly 50% of uncurved grade result for that hue.
+- Expected: effective hue shift approaches -180°; no NaN/Inf.
 
 ### 5) Curves bypassed when disabled
 
@@ -114,5 +112,5 @@ These checks validate the internal `Expression_HueRamp -> ColorLookup_HueCurves 
 ### 6) Debug LUT visualization
 
 - Set `debug_mode = 5`.
-- With curves enabled and connected, expected output RGB corresponds to sampled LUT `(R=HueShiftEnc, G=ChromaEnc, B=LightnessEnc)`.
-- With curves disabled/unavailable, expected output RGB is constant `(0.5, 0.5, 0.5)`.
+- With curves enabled and connected, expected output is grayscale LUT scalar (`R=G=B=sampled_sat`).
+- With curves disabled/unavailable, expected output RGB is constant `(1.0, 1.0, 1.0)`.

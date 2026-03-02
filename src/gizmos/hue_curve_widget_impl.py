@@ -740,6 +740,12 @@ if _HAS_QT:
             if knob is None:
                 return
             try:
+                try:
+                    import oklch_grade_callbacks as _okcb
+                    if hasattr(_okcb, "set_callback_node_hint"):
+                        _okcb.set_callback_node_hint(self._node)
+                except Exception:
+                    pass
                 knob.setValue(_hcd.points_to_json(self._points))
             except Exception as exc:
                 _debug("widget._save_points failed", node=self._node, error=exc)

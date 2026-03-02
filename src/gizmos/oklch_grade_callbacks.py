@@ -72,6 +72,7 @@ _DEBUG_LOG_ENV = "OKLCH_GRADE_DEBUG_LOG"
 _DEBUG_FILE = os.path.expanduser("~/.nuke/oklch_debug_on.txt")
 _DEBUG_DEFAULT_LOG = "/tmp/oklch_grade_callbacks.log"
 _DEBUG_ALWAYS = False
+_CALLBACK_NODE_HINT = ""
 
 
 def _is_truthy(value: str) -> bool:
@@ -106,6 +107,23 @@ def _node_name(node: Optional[nuke.Node]) -> str:
             return str(node.name())
         except Exception:
             return "<unknown>"
+
+
+def set_callback_node_hint(node: Optional[nuke.Node]) -> None:
+    """Record likely owner node for callback contexts where thisNode() is absent."""
+    global _CALLBACK_NODE_HINT
+    if node is None:
+        _CALLBACK_NODE_HINT = ""
+        return
+    try:
+        _CALLBACK_NODE_HINT = str(node.fullName())
+        return
+    except Exception:
+        pass
+    try:
+        _CALLBACK_NODE_HINT = str(node.name())
+    except Exception:
+        _CALLBACK_NODE_HINT = ""
 
 
 def _debug(message: str, *, node: Optional[nuke.Node] = None, error: Optional[Exception] = None) -> None:
@@ -705,20 +723,18 @@ def _resolve_callback_node() -> Optional[nuke.Node]:
         node = nuke.thisNode()
     except Exception:
         node = None
-    if node is not None:
+    if node is not None and _knob(node, "hue_curve_data") is not None:
         return node
 
     # Some knobChanged invocations from floating UI arrive without thisNode.
-    # Fall back to selected node so hue_curve_data writes still sync runtime.
-    try:
-        selected = nuke.selectedNode()
-    except Exception:
-        selected = None
-    if selected is None:
-        return None
-
-    if _knob(selected, "hue_curve_data") is not None:
-        return selected
+    # Use explicit owner hint set by the floating editor/widget.
+    if _CALLBACK_NODE_HINT:
+        try:
+            hinted = nuke.toNode(_CALLBACK_NODE_HINT)
+        except Exception:
+            hinted = None
+        if hinted is not None and _knob(hinted, "hue_curve_data") is not None:
+            return hinted
     return None
 
 
