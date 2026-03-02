@@ -61,6 +61,9 @@ oklch_nuke/
 │   └── gizmos/
 │       ├── OKLCH_Grade.gizmo             # Nuke gizmo with OCIO IO and grade controls
 │       ├── oklch_grade_callbacks.py      # onCreate / knobChanged callback module
+│       ├── hue_curve_window.py           # Floating Hue Curves editor window
+│       ├── hue_curve_widget_impl.py      # Interactive curve widget implementation
+│       ├── hue_curve_data.py             # Shared LUT/curve math and serialization helpers
 │       └── icons/
 │           └── oklch_grade.png
 ├── tools/
@@ -117,6 +120,14 @@ Input → OCIOColorSpace_IN (→ linear-sRGB) → BlinkScript_OKLCHGrade → OCI
 | `hue_target_shift` | Amount to shift the targeted hue band |
 | `hue_target_falloff_deg` | Width of the targeted hue band |
 
+### Hue Curves (Floating UI)
+
+| Knob | Description |
+|------|-------------|
+| `hue_curves_enable` | Enables per-hue LUT-driven curve shifts |
+| `Open Floating Curve Editor` | Launches the interactive curve editor window |
+| `hue_curve_data` | Hidden serialized curve state synchronized to runtime LUT |
+
 ### Utility
 
 | Knob | Description |
@@ -124,6 +135,30 @@ Input → OCIOColorSpace_IN (→ linear-sRGB) → BlinkScript_OKLCHGrade → OCI
 | `mix` | Blend between graded and original |
 | `clamp_output` | Clamp output to 0–1 |
 | `bypass` | Pass input through untouched |
+
+### Advanced
+
+| Knob | Description |
+|------|-------------|
+| `debug_mode` | Debug visualizations (`0=Off, 1=L, 2=C, 3=H, 4=Chroma Weight, 5=Hue Curves LUT`) |
+
+---
+
+## Hue Curves UI Workflow
+
+The new Hue Curves experience uses a floating editor instead of inline PyCustom embedding.
+
+1. Create `OKLCH_Grade`.
+2. Open the **Hue Curves** tab.
+3. Enable **Enable Hue Curves**.
+4. Click **Open Floating Curve Editor**.
+5. Add/drag points to author your per-hue curve.
+
+Under the hood:
+- The editor writes to the hidden `hue_curve_data` knob.
+- Callbacks build a direct internal `360x1` LUT expression.
+- Blink samples this LUT as scalar grayscale (`neutral = 1.0`) at each pixel hue.
+- The effect is applied only when `hue_curves_enable` is on.
 
 ---
 
@@ -208,13 +243,21 @@ Launch Nuke exactly as normal:
 rez env nuke nuke_oklch==dev -- nuke
 ```
 
-Callback diagnostics are always written to:
-- `/tmp/oklch_grade_callbacks.log`
+Callback diagnostics are opt-in.
 
-Inspect with:
+Enable debug logging only when needed:
 
 ```bash
-tail -n 200 /tmp/oklch_grade_callbacks.log
+export OKLCH_GRADE_DEBUG=1
+export OKLCH_HUE_WIDGET_DEBUG=1
+# optional custom callback log path:
+# export OKLCH_GRADE_DEBUG_LOG=/tmp/oklch_grade_callbacks.log
+```
+
+If `OKLCH_GRADE_DEBUG_LOG` is set, inspect it with:
+
+```bash
+tail -n 200 "$OKLCH_GRADE_DEBUG_LOG"
 ```
 
 Interpretation:
