@@ -28,3 +28,4 @@ dist/
 CLAUDE.md
 deploy.sh
 screenrec/oklch_grade_v001.mp4
+tests/crash_logs/

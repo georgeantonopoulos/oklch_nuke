@@ -195,10 +195,12 @@ Reference test vectors live in `tests/oklch_reference_test_vectors.md`. They cov
 
 ## Linux / Nuke16 Crash Isolation
 
-This diagnostic build reintroduces only a **minimal PyCustom probe widget**
-(`QWidget` subclass with no painting, no interaction, no data writes).
+Result from studio testing (Linux + Nuke16 + Rez): inline PyCustom embedding
+is unstable in this environment.
 
-No env vars, no `.nuke` setup, and no Rez changes are required.
+Current safe workflow:
+- Use **Open Floating Curve Editor** button in the Hue Curves tab for custom UI
+- Keep native `HueCorrect_HueCurves.hue` as an always-available fallback
 
 Launch Nuke exactly as normal:
 
@@ -216,8 +218,8 @@ tail -n 200 /tmp/oklch_grade_callbacks.log
 ```
 
 Interpretation:
-1. If Nuke segfaults with this probe build, the PyCustom embedding/lifecycle path is the cause.
-2. If it does not segfault, the crash is in higher-level widget logic (paint/input/data sync).
+1. If floating editor works and inline PyCustom does not, crash scope is PyCustom panel embedding on this stack.
+2. Native HueCorrect fallback remains available even if custom UI cannot be used.
 
 ---
 

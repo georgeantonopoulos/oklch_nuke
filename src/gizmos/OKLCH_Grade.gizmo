@@ -43,8 +43,10 @@ Gizmo {
  addUserKnob {20 hue_group_end n -1}
  addUserKnob {20 hue_curves_tab l "Hue Curves"}
  addUserKnob {41 hue_curves_enable l "Enable Hue Curves" T "BlinkScript_OKLCHGrade.hue_curves_enable"}
- addUserKnob {26 hue_curves_help l "" +STARTLINE T "<small>Diagnostic build: minimal PyCustom probe widget (no painting, no interactions, no data writes).</small>"}
- addUserKnob {12 hue_curve_widget_probe l "" +STARTLINE T "import hue_curve_widget; hue_curve_widget.create_probe_widget(nuke.thisNode())"}
+ addUserKnob {26 hue_curves_help l "" +STARTLINE T "<small>Linux-safe mode: inline PyCustom widget is disabled in this environment. Use the floating editor button or the native HueCorrect sat-curve fallback below.</small>"}
+ addUserKnob {22 open_hue_curve_editor l "Open Floating Curve Editor" T "import hue_curve_window as _hcw; _hcw.open_for_node(nuke.thisNode())" +STARTLINE}
+ addUserKnob {1 hue_curve_data l "" +INVISIBLE T ""}
+ addUserKnob {41 hue_curves_lut l "Hue Curves (Native Fallback)" T HueCorrect_HueCurves.hue}
  addUserKnob {26 "" +STARTLINE}
  addUserKnob {41 mix l Mix R 0 1 T BlinkScript_OKLCHGrade.mix}
  addUserKnob {41 clamp_output l "Clamp Output" T "BlinkScript_OKLCHGrade.clamp_output"}
