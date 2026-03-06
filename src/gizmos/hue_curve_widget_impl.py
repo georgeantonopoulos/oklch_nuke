@@ -169,7 +169,12 @@ def _widget_mode() -> str:
     return mode
 
 
+_widget_debug_knob_active = False
+
+
 def _debug_enabled() -> bool:
+    if _widget_debug_knob_active:
+        return True
     return _is_truthy(os.environ.get(_WIDGET_DEBUG_ENV, ""))
 
 
@@ -309,6 +314,14 @@ if _HAS_QT:
         ) -> None:
             super().__init__()
             self._node = node
+            # Activate widget debug if the gizmo's debug_callbacks knob is on.
+            global _widget_debug_knob_active
+            try:
+                dbg_k = node.knob("debug_callbacks") if node is not None else None
+                if dbg_k is not None and dbg_k.value():
+                    _widget_debug_knob_active = True
+            except Exception:
+                pass
             self._points = _defaults()
             self._drag_idx = None  # type: Optional[int]
             self._updating = False
