@@ -829,8 +829,15 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
             except Exception:
                 pass
 
+        link_target = f"BlinkScript_OKLCHGrade.{resolved_name}"
         try:
-            public_knob.setLink(f"BlinkScript_OKLCHGrade.{resolved_name}")
+            existing_link = public_knob.getLink(0) or ""
+        except Exception:
+            existing_link = ""
+        if existing_link == link_target:
+            continue
+        try:
+            public_knob.setLink(link_target)
         except Exception:
             unresolved += 1
 
