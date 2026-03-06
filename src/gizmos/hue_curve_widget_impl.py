@@ -733,7 +733,17 @@ if _HAS_QT:
             knob = self._knob("hue_curve_data")
             if knob is not None:
                 try:
-                    raw = str(knob.value() or "")
+                    # Use toScript() to get the raw stored string.
+                    # String_Knob.value() passes through TCL evaluation which
+                    # mangles JSON (square brackets are TCL command substitution).
+                    # toScript() returns the literal content with optional TCL
+                    # quoting braces/quotes that we strip off.
+                    raw = str(knob.toScript() or "")
+                    # Strip outer TCL quoting braces or double-quotes if present
+                    if len(raw) >= 2 and raw[0] == "{" and raw[-1] == "}":
+                        raw = raw[1:-1]
+                    elif len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+                        raw = raw[1:-1]
                     _debug(
                         f"widget._load_points raw len={len(raw)} "
                         f"empty={not raw.strip()} "
@@ -782,9 +792,15 @@ if _HAS_QT:
                 except Exception:
                     pass
                 json_str = _hcd.points_to_json(self._points)
-                knob.setValue(json_str)
-                # Verify the write stuck
-                readback = str(knob.value() or "")
+                # Use fromScript() with TCL brace quoting to store JSON
+                # literally.  setValue() passes through TCL evaluation which
+                # treats square brackets as command substitution, mangling
+                # the JSON (e.g. [[0.0,1.0]] becomes a TCL error string).
+                knob.fromScript("{" + json_str + "}")
+                # Verify the write stuck (toScript includes TCL braces)
+                readback = str(knob.toScript() or "")
+                if len(readback) >= 2 and readback[0] == "{" and readback[-1] == "}":
+                    readback = readback[1:-1]
                 _debug(
                     f"widget._save_points wrote {len(json_str)} chars, "
                     f"{len(self._points)} points, "

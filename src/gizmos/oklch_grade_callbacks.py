@@ -620,7 +620,10 @@ def _ensure_hue_curve_data(node: Optional[nuke.Node], huecorrect: Optional[nuke.
         return
 
     try:
-        raw = str(curve_data_knob.value() or "")
+        raw = str(curve_data_knob.toScript() or "")
+        # Strip TCL brace quoting
+        if len(raw) >= 2 and raw[0] == "{" and raw[-1] == "}":
+            raw = raw[1:-1]
     except Exception:
         raw = ""
     if raw.strip():
@@ -636,7 +639,9 @@ def _ensure_hue_curve_data(node: Optional[nuke.Node], huecorrect: Optional[nuke.
 
     points = migrated or list(_hcd._DEFAULT_POINTS)
     try:
-        curve_data_knob.setValue(_hcd.points_to_json(points))
+        # Use fromScript with TCL brace quoting — setValue passes through
+        # TCL evaluation which mangles JSON square brackets.
+        curve_data_knob.fromScript("{" + _hcd.points_to_json(points) + "}")
     except Exception:
         pass
 
@@ -652,7 +657,10 @@ def _apply_expression_lut_from_data(node: Optional[nuke.Node]) -> bool:
     raw = ""
     if curve_data_knob is not None:
         try:
-            raw = str(curve_data_knob.value() or "")
+            raw = str(curve_data_knob.toScript() or "")
+            # Strip TCL brace quoting
+            if len(raw) >= 2 and raw[0] == "{" and raw[-1] == "}":
+                raw = raw[1:-1]
         except Exception:
             raw = ""
 
