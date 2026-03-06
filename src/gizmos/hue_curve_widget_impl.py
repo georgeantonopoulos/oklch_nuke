@@ -365,7 +365,14 @@ if _HAS_QT:
             _debug("widget.updateValue.start", node=self._node)
             self._updating = True
             try:
-                self._points = self._load_points()
+                loaded = self._load_points()
+                _debug(
+                    f"widget.updateValue loaded {len(loaded)} points, "
+                    f"first_y={loaded[0][1] if loaded else '?'}, "
+                    f"all_neutral={all(abs(p[1] - 1.0) < 0.001 for p in loaded)}",
+                    node=self._node,
+                )
+                self._points = loaded
                 self.update()
             except Exception as exc:
                 _debug("widget.updateValue failed", node=self._node, error=exc)
@@ -694,9 +701,9 @@ if _HAS_QT:
             except Exception:
                 width = 360
 
-            self._set_blink_param_if_exists(blink, "hue_lut_width", "Hue LUT Width", width)
-            self._set_blink_param_if_exists(blink, "hue_lut_connected", "Hue LUT Connected", connected)
-            self._set_blink_param_if_exists(blink, "hue_curves_enable", "Hue Curves Enable", True)
+            self._set_blink_param_if_exists(blink, "hue_lut_width", "hue_lut_width", width)
+            self._set_blink_param_if_exists(blink, "hue_lut_connected", "hue_lut_connected", connected)
+            self._set_blink_param_if_exists(blink, "hue_curves_enable", "hue_curves_enable", True)
 
             enable_knob = self._knob("hue_curves_enable")
             if enable_knob is not None:
@@ -714,11 +721,23 @@ if _HAS_QT:
             if knob is not None:
                 try:
                     raw = str(knob.value() or "")
+                    _debug(
+                        f"widget._load_points raw len={len(raw)} "
+                        f"empty={not raw.strip()}",
+                        node=self._node,
+                    )
                     if raw.strip():
-                        return _normalize(json.loads(raw))
+                        pts = _normalize(json.loads(raw))
+                        _debug(
+                            f"widget._load_points parsed {len(pts)} points",
+                            node=self._node,
+                        )
+                        return pts
                 except Exception as exc:
                     _debug("widget._load_points json parse failed", node=self._node, error=exc)
                     pass
+            else:
+                _debug("widget._load_points: hue_curve_data knob is None", node=self._node)
             # Legacy: migrate from HueCorrect sat curve
             if _hcd is not None and self._node is not None:
                 try:
@@ -735,9 +754,11 @@ if _HAS_QT:
 
         def _save_points(self):
             if _hcd is None:
+                _debug("widget._save_points skipped: _hcd is None", node=self._node)
                 return
             knob = self._knob("hue_curve_data")
             if knob is None:
+                _debug("widget._save_points skipped: knob is None", node=self._node)
                 return
             try:
                 try:
@@ -746,7 +767,13 @@ if _HAS_QT:
                         _okcb.set_callback_node_hint(self._node)
                 except Exception:
                     pass
-                knob.setValue(_hcd.points_to_json(self._points))
+                json_str = _hcd.points_to_json(self._points)
+                knob.setValue(json_str)
+                _debug(
+                    f"widget._save_points wrote {len(json_str)} chars, "
+                    f"{len(self._points)} points",
+                    node=self._node,
+                )
             except Exception as exc:
                 _debug("widget._save_points failed", node=self._node, error=exc)
 

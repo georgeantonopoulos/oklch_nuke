@@ -184,7 +184,7 @@ def _diag_dump(label: str, node: Optional[nuke.Node]) -> None:
         try:
             link = k.getLink(0) or "<no-link>"
         except Exception:
-            link = "<err>"
+            link = "<type41>"  # type-41 Link_Knobs don't support getLink()
         lines.append(f"  {kname}: val={val} link={link}")
     blink = node.node("BlinkScript_OKLCHGrade")
     if blink is not None:
@@ -842,10 +842,25 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
             except Exception:
                 pass
 
+        # Type-41 Link_Knobs (addUserKnob {41 ... T ...}) are wired at gizmo
+        # construction time.  setLink()/getLink() are expression-link APIs and
+        # fail on type-41 knobs.  We only need setLink() as a fallback if the
+        # gizmo-level link is somehow broken (the public knob can't read a
+        # value from the target).
+        already_linked = False
         try:
-            public_knob.setLink(f"BlinkScript_OKLCHGrade.{resolved_name}")
+            # If the public knob can successfully read a value, the type-41
+            # link is working — no need to call setLink().
+            public_knob.value()
+            already_linked = True
         except Exception:
-            unresolved += 1
+            pass
+
+        if not already_linked:
+            try:
+                public_knob.setLink(f"BlinkScript_OKLCHGrade.{resolved_name}")
+            except Exception:
+                unresolved += 1
 
     _debug(f"sync_links done unresolved={unresolved} force_recompile={force_recompile}", node=node)
     return unresolved
