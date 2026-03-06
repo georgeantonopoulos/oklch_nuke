@@ -860,24 +860,34 @@ def _initialize_this_node_impl() -> None:
     _debug("initialize_impl start", node=node)
     _ensure_hue_lut_format()
     _apply_colorspace_defaults(node)
-    unresolved = _sync_links(node, force_recompile=False)
-    if unresolved:
-        # One more forced pass for legacy setups where params appear after
-        # first compile/reload cycle.
-        unresolved = _sync_links(node, force_recompile=True)
+
+    # Check if BlinkScript param knobs already exist.  When loading from a
+    # saved .nk script the gizmo's embedded kernelSource is already compiled
+    # and the type-41 Link_Knobs already point at the correct targets with
+    # user values intact.  Running _sync_links in that case would recompile
+    # and/or re-setLink(), destroying saved values.  Only run the full sync
+    # path when params are genuinely absent (fresh node creation edge case).
+    blink = node.node("BlinkScript_OKLCHGrade") if node is not None else None
+    missing = _missing_param_knobs(blink)
+    if missing:
+        unresolved = _sync_links(node, force_recompile=False)
+        if unresolved:
+            unresolved = _sync_links(node, force_recompile=True)
+        if unresolved:
+            if "#cc6666" not in _status_value(node).lower():
+                _set_status(
+                    node,
+                    (
+                        "<font color='#cc6666'><small><b>Status:</b> "
+                        "{} linked controls are unresolved. Open BlinkScript node and click Recompile."
+                        "</small></font>"
+                    ).format(unresolved),
+                )
+    else:
+        _debug("initialize_impl skipped sync_links: blink params already present", node=node)
+
     _sync_hue_lut_state(node)
-    if unresolved:
-        if "#cc6666" in _status_value(node).lower():
-            return
-        _set_status(
-            node,
-            (
-                "<font color='#cc6666'><small><b>Status:</b> "
-                "{} linked controls are unresolved. Open BlinkScript node and click Recompile."
-                "</small></font>"
-            ).format(unresolved),
-        )
-    _debug(f"initialize_impl end unresolved={unresolved}", node=node)
+    _debug(f"initialize_impl end missing={len(missing)}", node=node)
 
 
 def handle_this_knob_changed() -> None:
