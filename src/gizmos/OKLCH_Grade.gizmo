@@ -54,6 +54,7 @@ Gizmo {
  addUserKnob {41 debug_mode l "Debug Mode" T "BlinkScript_OKLCHGrade.debug_mode"}
  addUserKnob {26 debug_modes_help l "" +STARTLINE T "<small>Debug modes: 0=Off, 1=L, 2=C, 3=H, 4=Chroma Weight, 5=Hue Curves LUT</small>"}
  addUserKnob {1 working_linear_srgb_space l "Working Linear sRGB" +INVISIBLE T scene_linear}
+ addUserKnob {6 debug_callbacks l "Debug Callbacks (log to Script Editor)" +STARTLINE}
  addUserKnob {26 "" +STARTLINE}
  addUserKnob {26 info_label l "" +STARTLINE T "<b>Reference Anchors</b>"}
  addUserKnob {26 hue_info l "" +STARTLINE T "R: 0° | Y: 85° | G: 145° | C: 195° | B: 265° | M: 325°"}
