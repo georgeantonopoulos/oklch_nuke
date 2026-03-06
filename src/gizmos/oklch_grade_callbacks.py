@@ -15,28 +15,28 @@ import nuke
 
 # (public knob name, Blink label, internal var name, optional (min, max) range)
 _PARAM_LINKS = (
-    ("l_gain", "L Gain", "l_gain", (0.0, 3.0)),
-    ("l_offset", "L Offset", "l_offset", (-1.0, 1.0)),
-    ("l_contrast", "L Contrast", "l_contrast", (0.0, 3.0)),
-    ("l_pivot", "L Pivot", "l_pivot", (0.0, 1.0)),
-    ("c_gain", "C Gain", "c_gain", (0.0, 2.0)),
-    ("c_offset", "C Offset", "c_offset", (-0.5, 0.5)),
-    ("hue_shift_deg", "Hue Shift (deg)", "hue_shift_deg", (-360.0, 360.0)),
-    ("hue_chroma_threshold", "Hue Chroma Threshold", "hue_chroma_threshold", (0.0, 0.2)),
-    ("hue_shift_red", "Hue Shift Red", "hue_shift_red", (-180.0, 180.0)),
-    ("hue_shift_yellow", "Hue Shift Yellow", "hue_shift_yellow", (-180.0, 180.0)),
-    ("hue_shift_green", "Hue Shift Green", "hue_shift_green", (-180.0, 180.0)),
-    ("hue_shift_cyan", "Hue Shift Cyan", "hue_shift_cyan", (-180.0, 180.0)),
-    ("hue_shift_blue", "Hue Shift Blue", "hue_shift_blue", (-180.0, 180.0)),
-    ("hue_shift_magenta", "Hue Shift Magenta", "hue_shift_magenta", (-180.0, 180.0)),
-    ("hue_target_deg", "Hue Target (deg)", "hue_target_deg", (0.0, 360.0)),
-    ("hue_target_shift", "Hue Target Shift", "hue_target_shift", (-180.0, 180.0)),
-    ("hue_target_falloff_deg", "Hue Target Falloff", "hue_target_falloff_deg", (1.0, 180.0)),
-    ("hue_curves_enable", "Hue Curves Enable", "hue_curves_enable", None),
-    ("mix", "Mix", "mix", (0.0, 1.0)),
-    ("clamp_output", "Clamp Output", "clamp_output", None),
-    ("bypass", "Bypass", "bypass", None),
-    ("debug_mode", "Debug Mode", "debug_mode", None),
+    ("l_gain", "l_gain", "l_gain", (0.0, 3.0)),
+    ("l_offset", "l_offset", "l_offset", (-1.0, 1.0)),
+    ("l_contrast", "l_contrast", "l_contrast", (0.0, 3.0)),
+    ("l_pivot", "l_pivot", "l_pivot", (0.0, 1.0)),
+    ("c_gain", "c_gain", "c_gain", (0.0, 2.0)),
+    ("c_offset", "c_offset", "c_offset", (-0.5, 0.5)),
+    ("hue_shift_deg", "hue_shift_deg", "hue_shift_deg", (-360.0, 360.0)),
+    ("hue_chroma_threshold", "hue_chroma_threshold", "hue_chroma_threshold", (0.0, 0.2)),
+    ("hue_shift_red", "hue_shift_red", "hue_shift_red", (-180.0, 180.0)),
+    ("hue_shift_yellow", "hue_shift_yellow", "hue_shift_yellow", (-180.0, 180.0)),
+    ("hue_shift_green", "hue_shift_green", "hue_shift_green", (-180.0, 180.0)),
+    ("hue_shift_cyan", "hue_shift_cyan", "hue_shift_cyan", (-180.0, 180.0)),
+    ("hue_shift_blue", "hue_shift_blue", "hue_shift_blue", (-180.0, 180.0)),
+    ("hue_shift_magenta", "hue_shift_magenta", "hue_shift_magenta", (-180.0, 180.0)),
+    ("hue_target_deg", "hue_target_deg", "hue_target_deg", (0.0, 360.0)),
+    ("hue_target_shift", "hue_target_shift", "hue_target_shift", (-180.0, 180.0)),
+    ("hue_target_falloff_deg", "hue_target_falloff_deg", "hue_target_falloff_deg", (1.0, 180.0)),
+    ("hue_curves_enable", "hue_curves_enable", "hue_curves_enable", None),
+    ("mix", "mix", "mix", (0.0, 1.0)),
+    ("clamp_output", "clamp_output", "clamp_output", None),
+    ("bypass", "bypass", "bypass", None),
+    ("debug_mode", "debug_mode", "debug_mode", None),
 )
 
 # Knobs that actually require a re-sync when changed.  All others (slider
@@ -727,8 +727,8 @@ def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
     except Exception:
         connected = False
 
-    _set_blink_param_if_exists(blink, "hue_lut_width", "Hue LUT Width", width)
-    _set_blink_param_if_exists(blink, "hue_lut_connected", "Hue LUT Connected", connected)
+    _set_blink_param_if_exists(blink, "hue_lut_width", "hue_lut_width", width)
+    _set_blink_param_if_exists(blink, "hue_lut_connected", "hue_lut_connected", connected)
     _ensure_hue_curve_data(node, legacy_huecorrect)
     _apply_expression_lut_from_data(node)
 
@@ -745,12 +745,12 @@ def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
         _set_blink_param_if_exists(
             blink,
             "hue_curves_enable",
-            "Hue Curves Enable",
+            "hue_curves_enable",
             curves_requested,
         )
 
     if not connected:
-        _set_blink_param_if_exists(blink, "hue_curves_enable", "Hue Curves Enable", False)
+        _set_blink_param_if_exists(blink, "hue_curves_enable", "hue_curves_enable", False)
         if hue_curves_knob is not None:
             try:
                 hue_curves_knob.setValue(False)
