@@ -736,7 +736,8 @@ if _HAS_QT:
                     raw = str(knob.value() or "")
                     _debug(
                         f"widget._load_points raw len={len(raw)} "
-                        f"empty={not raw.strip()}",
+                        f"empty={not raw.strip()} "
+                        f"repr={raw!r:.120}",
                         node=self._node,
                     )
                     if raw.strip():
@@ -782,9 +783,12 @@ if _HAS_QT:
                     pass
                 json_str = _hcd.points_to_json(self._points)
                 knob.setValue(json_str)
+                # Verify the write stuck
+                readback = str(knob.value() or "")
                 _debug(
                     f"widget._save_points wrote {len(json_str)} chars, "
-                    f"{len(self._points)} points",
+                    f"{len(self._points)} points, "
+                    f"readback_len={len(readback)} match={readback == json_str}",
                     node=self._node,
                 )
             except Exception as exc:
