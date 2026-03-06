@@ -82,17 +82,6 @@ def _is_truthy(value: str) -> bool:
 _debug_knob_active = False
 
 
-def _debug_enabled() -> bool:
-    if _DEBUG_ALWAYS or _debug_knob_active:
-        return True
-    if _is_truthy(os.environ.get(_DEBUG_ENV, "")):
-        return True
-    try:
-        return os.path.isfile(_DEBUG_FILE)
-    except Exception:
-        return False
-
-
 def _check_debug_knob(node: Optional[nuke.Node]) -> None:
     """Activate module-level debug if the gizmo's debug_callbacks knob is on."""
     global _debug_knob_active
@@ -104,6 +93,17 @@ def _check_debug_knob(node: Optional[nuke.Node]) -> None:
             _debug_knob_active = True
     except Exception:
         pass
+
+
+def _debug_enabled() -> bool:
+    if _DEBUG_ALWAYS or _debug_knob_active:
+        return True
+    if _is_truthy(os.environ.get(_DEBUG_ENV, "")):
+        return True
+    try:
+        return os.path.isfile(_DEBUG_FILE)
+    except Exception:
+        return False
 
 
 def _debug_log_path() -> str:
@@ -167,13 +167,12 @@ def _debug(message: str, *, node: Optional[nuke.Node] = None, error: Optional[Ex
         pass
 
 
-def _diag_knob_values(label: str, node: Optional[nuke.Node]) -> None:
-    """Dump key knob values and link state for debugging persistence issues."""
+def _diag_dump(label: str, node: Optional[nuke.Node]) -> None:
+    """Dump key knob values and link state for debugging persistence."""
     if not _debug_enabled() or node is None:
         return
-    diag_knobs = ["l_gain", "l_offset", "hue_shift_deg", "hue_shift_red", "c_gain"]
     lines = [f"DIAG[{label}]"]
-    for kname in diag_knobs:
+    for kname in ("l_gain", "l_offset", "hue_shift_deg", "hue_shift_red", "c_gain"):
         k = _knob(node, kname)
         if k is None:
             lines.append(f"  {kname}: MISSING_ON_GIZMO")
@@ -181,40 +180,28 @@ def _diag_knob_values(label: str, node: Optional[nuke.Node]) -> None:
         try:
             val = k.value()
         except Exception:
-            val = "<error>"
+            val = "<err>"
         try:
             link = k.getLink(0) or "<no-link>"
         except Exception:
-            link = "<getLink-error>"
-        lines.append(f"  {kname}: value={val} link={link}")
-    blink = node.node("BlinkScript_OKLCHGrade") if node is not None else None
+            link = "<err>"
+        lines.append(f"  {kname}: val={val} link={link}")
+    blink = node.node("BlinkScript_OKLCHGrade")
     if blink is not None:
-        lines.append("  BlinkScript params:")
-        for kname in diag_knobs:
-            for candidate in (kname, f"OKLCHGrade_{kname}"):
-                bk = _knob(blink, candidate)
-                if bk is not None:
-                    try:
-                        lines.append(f"    {candidate}: value={bk.value()}")
-                    except Exception:
-                        lines.append(f"    {candidate}: <error>")
-        # Also list ALL knobs on BlinkScript to see actual param names
         try:
-            all_knob_names = [blink.knob(i).name() for i in range(blink.numKnobs())]
-            param_knobs = [n for n in all_knob_names if n not in (
-                "name", "xpos", "ypos", "tile_color", "note_font", "note_font_size",
-                "note_font_color", "selected", "hide_input", "cached", "disable",
-                "dope_sheet", "gl_color", "label", "icon", "postage_stamp",
-                "postage_stamp_frame", "lifetimeStart", "lifetimeEnd", "useLifetime",
-                "indicators", "process_mask", "channel", "kernelSource",
-                "kernelSourceFile", "recompile", "recompileCount", "rebuild",
-                "rebuild_finalise", "maxGPUMemory", "maxTileLines", "ProgramGroup",
-                "KernelDescription", "kernelDescription", "isBaked",
-            )]
-            lines.append(f"    ALL_PARAM_KNOBS: {param_knobs}")
+            names = [blink.knob(i).name() for i in range(blink.numKnobs())]
+            params = [n for n in names if not n.startswith(("name", "xpos", "ypos",
+                "tile_color", "note_font", "selected", "hide_input", "cached",
+                "disable", "dope_sheet", "gl_color", "label", "icon", "postage",
+                "lifetime", "useLifetime", "indicators", "process_mask", "channel",
+                "kernelSource", "recompile", "rebuild", "maxGPU", "maxTile",
+                "ProgramGroup", "KernelDesc", "kernelDesc", "isBaked",
+                "kernelSourceFile",
+            ))]
+            lines.append(f"  BLINK_KNOBS: {params}")
         except Exception as exc:
-            lines.append(f"    ALL_PARAM_KNOBS: <error: {exc}>")
-    _debug("\n".join(lines), node=node)
+            lines.append(f"  BLINK_KNOBS: <err: {exc}>")
+    _debug("\\n".join(lines), node=node)
 
 
 def _nuke_major_version() -> int:
@@ -306,53 +293,17 @@ def _missing_param_knobs(blink: Optional[nuke.Node]) -> list[str]:
     return missing
 
 
-def _snapshot_blink_params(blink: Optional[nuke.Node]) -> dict:
-    """Capture current BlinkScript param knob values before a destructive recompile."""
-    if blink is None:
-        return {}
-    snapshot: dict = {}
-    for _, label, internal_name, _ in _PARAM_LINKS:
-        resolved = _resolve_blink_knob_name(blink, label, internal_name)
-        if not resolved:
-            continue
-        k = _knob(blink, resolved)
-        if k is None:
-            continue
-        try:
-            snapshot[resolved] = k.value()
-        except Exception:
-            pass
-    return snapshot
-
-
-def _restore_blink_params(blink: Optional[nuke.Node], snapshot: dict) -> None:
-    """Restore previously captured param values after recompile."""
-    if blink is None or not snapshot:
-        return
-    for knob_name, value in snapshot.items():
-        k = _knob(blink, knob_name)
-        if k is None:
-            continue
-        try:
-            k.setValue(value)
-        except Exception:
-            pass
-
-
-def _run_recompile(blink: Optional[nuke.Node], preserve_values: bool = True) -> None:
+def _run_recompile(blink: Optional[nuke.Node]) -> None:
     recompile = _knob(blink, "recompile")
     if recompile is None:
         return
-    snapshot = _snapshot_blink_params(blink) if preserve_values else {}
     try:
         recompile.execute()
         _debug("blink.recompile executed", node=blink)
     except Exception as exc:
         # Keep panel responsive even if compile fails.
         _debug("blink.recompile failed", node=blink, error=exc)
-    if snapshot:
-        _restore_blink_params(blink, snapshot)
-        _debug(f"blink.recompile restored {len(snapshot)} param values", node=blink)
+        pass
 
 
 def _set_kernel_source_inline_from_file(blink: Optional[nuke.Node]) -> bool:
@@ -563,10 +514,9 @@ def _prepare_blink_params(node: Optional[nuke.Node], force_recompile: bool) -> t
     # runtime.  Go straight to inline kernelSource (read .cpp, set knob value,
     # recompile).
     if _nuke_major_version() < 16:
-        missing = _missing_param_knobs(blink)
-        if missing and _set_kernel_source_inline_from_file(blink):
+        if _set_kernel_source_inline_from_file(blink):
             _run_recompile(blink)
-            missing = _missing_param_knobs(blink)
+        missing = _missing_param_knobs(blink)
         _debug(
             f"prepare_blink_params legacy_mode missing={len(missing)}",
             node=node,
@@ -587,10 +537,7 @@ def _prepare_blink_params(node: Optional[nuke.Node], force_recompile: bool) -> t
         )
 
     missing_before = _missing_param_knobs(blink)
-    # Only recompile when param knobs are genuinely missing.  force_recompile
-    # is honoured only when params are absent — recompiling with all params
-    # present would destroy saved values for no benefit.
-    needs_compile = bool(missing_before)
+    needs_compile = force_recompile or bool(missing_before)
     if needs_compile:
         if kernel_file_changed:
             _run_reload_kernel_source_file(blink)
@@ -895,15 +842,8 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
             except Exception:
                 pass
 
-        link_target = f"BlinkScript_OKLCHGrade.{resolved_name}"
         try:
-            existing_link = public_knob.getLink(0) or ""
-        except Exception:
-            existing_link = ""
-        if existing_link == link_target:
-            continue
-        try:
-            public_knob.setLink(link_target)
+            public_knob.setLink(f"BlinkScript_OKLCHGrade.{resolved_name}")
         except Exception:
             unresolved += 1
 
@@ -932,37 +872,28 @@ def _initialize_this_node_impl() -> None:
     node = nuke.thisNode()
     _check_debug_knob(node)
     _debug("initialize_impl start", node=node)
-
-    # --- DIAGNOSTIC: dump gizmo knob values at onCreate time ---
-    _diag_knob_values("onCreate_BEFORE_sync", node)
-
+    _diag_dump("onCreate_START", node)
     _ensure_hue_lut_format()
     _apply_colorspace_defaults(node)
-
-    blink = node.node("BlinkScript_OKLCHGrade") if node is not None else None
-    missing = _missing_param_knobs(blink)
-    _debug(f"initialize_impl missing_param_knobs={missing}", node=node)
-
-    if missing:
-        unresolved = _sync_links(node, force_recompile=False)
-        if unresolved:
-            unresolved = _sync_links(node, force_recompile=True)
-        if unresolved:
-            if "#cc6666" not in _status_value(node).lower():
-                _set_status(
-                    node,
-                    (
-                        "<font color='#cc6666'><small><b>Status:</b> "
-                        "{} linked controls are unresolved. Open BlinkScript node and click Recompile."
-                        "</small></font>"
-                    ).format(unresolved),
-                )
-        _diag_knob_values("onCreate_AFTER_sync", node)
-    else:
-        _debug("initialize_impl skipped sync_links: blink params already present", node=node)
-
+    unresolved = _sync_links(node, force_recompile=False)
+    if unresolved:
+        # One more forced pass for legacy setups where params appear after
+        # first compile/reload cycle.
+        unresolved = _sync_links(node, force_recompile=True)
     _sync_hue_lut_state(node)
-    _debug(f"initialize_impl end missing={len(missing)}", node=node)
+    if unresolved:
+        if "#cc6666" in _status_value(node).lower():
+            return
+        _set_status(
+            node,
+            (
+                "<font color='#cc6666'><small><b>Status:</b> "
+                "{} linked controls are unresolved. Open BlinkScript node and click Recompile."
+                "</small></font>"
+            ).format(unresolved),
+        )
+    _diag_dump("onCreate_END", node)
+    _debug(f"initialize_impl end unresolved={unresolved}", node=node)
 
 
 def handle_this_knob_changed() -> None:
@@ -974,6 +905,7 @@ def handle_this_knob_changed() -> None:
     """
     global _in_callback
     if _in_callback:
+        _debug("handle_this_knob_changed skipped: re-entrant call")
         return
 
     # Filter: only react to knobs that actually need attention.
@@ -984,7 +916,6 @@ def handle_this_knob_changed() -> None:
         knob_name = ""
 
     node_for_log = _resolve_callback_node()
-    _check_debug_knob(node_for_log)
     if knob_name and knob_name not in _KNOBS_NEEDING_SYNC:
         _debug(f"handle_this_knob_changed ignored knob={knob_name}", node=node_for_log)
         return
