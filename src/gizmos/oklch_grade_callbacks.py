@@ -15,28 +15,28 @@ import nuke
 
 # (public knob name, Blink label, internal var name, optional (min, max) range)
 _PARAM_LINKS = (
-    ("l_gain", "L Gain", "l_gain", (0.0, 3.0)),
-    ("l_offset", "L Offset", "l_offset", (-1.0, 1.0)),
-    ("l_contrast", "L Contrast", "l_contrast", (0.0, 3.0)),
-    ("l_pivot", "L Pivot", "l_pivot", (0.0, 1.0)),
-    ("c_gain", "C Gain", "c_gain", (0.0, 2.0)),
-    ("c_offset", "C Offset", "c_offset", (-0.5, 0.5)),
-    ("hue_shift_deg", "Hue Shift (deg)", "hue_shift_deg", (-360.0, 360.0)),
-    ("hue_chroma_threshold", "Hue Chroma Threshold", "hue_chroma_threshold", (0.0, 0.2)),
-    ("hue_shift_red", "Hue Shift Red", "hue_shift_red", (-180.0, 180.0)),
-    ("hue_shift_yellow", "Hue Shift Yellow", "hue_shift_yellow", (-180.0, 180.0)),
-    ("hue_shift_green", "Hue Shift Green", "hue_shift_green", (-180.0, 180.0)),
-    ("hue_shift_cyan", "Hue Shift Cyan", "hue_shift_cyan", (-180.0, 180.0)),
-    ("hue_shift_blue", "Hue Shift Blue", "hue_shift_blue", (-180.0, 180.0)),
-    ("hue_shift_magenta", "Hue Shift Magenta", "hue_shift_magenta", (-180.0, 180.0)),
-    ("hue_target_deg", "Hue Target (deg)", "hue_target_deg", (0.0, 360.0)),
-    ("hue_target_shift", "Hue Target Shift", "hue_target_shift", (-180.0, 180.0)),
-    ("hue_target_falloff_deg", "Hue Target Falloff", "hue_target_falloff_deg", (1.0, 180.0)),
-    ("hue_curves_enable", "Hue Curves Enable", "hue_curves_enable", None),
-    ("mix", "Mix", "mix", (0.0, 1.0)),
-    ("clamp_output", "Clamp Output", "clamp_output", None),
-    ("bypass", "Bypass", "bypass", None),
-    ("debug_mode", "Debug Mode", "debug_mode", None),
+    ("l_gain", "l_gain", "l_gain", (0.0, 3.0)),
+    ("l_offset", "l_offset", "l_offset", (-1.0, 1.0)),
+    ("l_contrast", "l_contrast", "l_contrast", (0.0, 3.0)),
+    ("l_pivot", "l_pivot", "l_pivot", (0.0, 1.0)),
+    ("c_gain", "c_gain", "c_gain", (0.0, 2.0)),
+    ("c_offset", "c_offset", "c_offset", (-0.5, 0.5)),
+    ("hue_shift_deg", "hue_shift_deg", "hue_shift_deg", (-360.0, 360.0)),
+    ("hue_chroma_threshold", "hue_chroma_threshold", "hue_chroma_threshold", (0.0, 0.2)),
+    ("hue_shift_red", "hue_shift_red", "hue_shift_red", (-180.0, 180.0)),
+    ("hue_shift_yellow", "hue_shift_yellow", "hue_shift_yellow", (-180.0, 180.0)),
+    ("hue_shift_green", "hue_shift_green", "hue_shift_green", (-180.0, 180.0)),
+    ("hue_shift_cyan", "hue_shift_cyan", "hue_shift_cyan", (-180.0, 180.0)),
+    ("hue_shift_blue", "hue_shift_blue", "hue_shift_blue", (-180.0, 180.0)),
+    ("hue_shift_magenta", "hue_shift_magenta", "hue_shift_magenta", (-180.0, 180.0)),
+    ("hue_target_deg", "hue_target_deg", "hue_target_deg", (0.0, 360.0)),
+    ("hue_target_shift", "hue_target_shift", "hue_target_shift", (-180.0, 180.0)),
+    ("hue_target_falloff_deg", "hue_target_falloff_deg", "hue_target_falloff_deg", (1.0, 180.0)),
+    ("hue_curves_enable", "hue_curves_enable", "hue_curves_enable", None),
+    ("mix", "mix", "mix", (0.0, 1.0)),
+    ("clamp_output", "clamp_output", "clamp_output", None),
+    ("bypass", "bypass", "bypass", None),
+    ("debug_mode", "debug_mode", "debug_mode", None),
 )
 
 # Knobs that actually require a re-sync when changed.  All others (slider
@@ -79,8 +79,24 @@ def _is_truthy(value: str) -> bool:
     return str(value or "").strip().lower() in ("1", "true", "yes", "on")
 
 
+_debug_knob_active = False
+
+
+def _check_debug_knob(node: Optional[nuke.Node]) -> None:
+    """Activate module-level debug if the gizmo's debug_callbacks knob is on."""
+    global _debug_knob_active
+    if node is None:
+        return
+    try:
+        k = node.knob("debug_callbacks")
+        if k is not None and k.value():
+            _debug_knob_active = True
+    except Exception:
+        pass
+
+
 def _debug_enabled() -> bool:
-    if _DEBUG_ALWAYS:
+    if _DEBUG_ALWAYS or _debug_knob_active:
         return True
     if _is_truthy(os.environ.get(_DEBUG_ENV, "")):
         return True
@@ -149,6 +165,43 @@ def _debug(message: str, *, node: Optional[nuke.Node] = None, error: Optional[Ex
             handle.write(line + "\n")
     except Exception:
         pass
+
+
+def _diag_dump(label: str, node: Optional[nuke.Node]) -> None:
+    """Dump key knob values and link state for debugging persistence."""
+    if not _debug_enabled() or node is None:
+        return
+    lines = [f"DIAG[{label}]"]
+    for kname in ("l_gain", "l_offset", "hue_shift_deg", "hue_shift_red", "c_gain"):
+        k = _knob(node, kname)
+        if k is None:
+            lines.append(f"  {kname}: MISSING_ON_GIZMO")
+            continue
+        try:
+            val = k.value()
+        except Exception:
+            val = "<err>"
+        try:
+            link = k.getLink(0) or "<no-link>"
+        except Exception:
+            link = "<type41>"  # type-41 Link_Knobs don't support getLink()
+        lines.append(f"  {kname}: val={val} link={link}")
+    blink = node.node("BlinkScript_OKLCHGrade")
+    if blink is not None:
+        try:
+            names = [blink.knob(i).name() for i in range(blink.numKnobs())]
+            params = [n for n in names if not n.startswith(("name", "xpos", "ypos",
+                "tile_color", "note_font", "selected", "hide_input", "cached",
+                "disable", "dope_sheet", "gl_color", "label", "icon", "postage",
+                "lifetime", "useLifetime", "indicators", "process_mask", "channel",
+                "kernelSource", "recompile", "rebuild", "maxGPU", "maxTile",
+                "ProgramGroup", "KernelDesc", "kernelDesc", "isBaked",
+                "kernelSourceFile",
+            ))]
+            lines.append(f"  BLINK_KNOBS: {params}")
+        except Exception as exc:
+            lines.append(f"  BLINK_KNOBS: <err: {exc}>")
+    _debug("\\n".join(lines), node=node)
 
 
 def _nuke_major_version() -> int:
@@ -567,7 +620,10 @@ def _ensure_hue_curve_data(node: Optional[nuke.Node], huecorrect: Optional[nuke.
         return
 
     try:
-        raw = str(curve_data_knob.value() or "")
+        raw = str(curve_data_knob.toScript() or "")
+        # Strip TCL brace quoting
+        if len(raw) >= 2 and raw[0] == "{" and raw[-1] == "}":
+            raw = raw[1:-1]
     except Exception:
         raw = ""
     if raw.strip():
@@ -583,7 +639,9 @@ def _ensure_hue_curve_data(node: Optional[nuke.Node], huecorrect: Optional[nuke.
 
     points = migrated or list(_hcd._DEFAULT_POINTS)
     try:
-        curve_data_knob.setValue(_hcd.points_to_json(points))
+        # Use fromScript with TCL brace quoting — setValue passes through
+        # TCL evaluation which mangles JSON square brackets.
+        curve_data_knob.fromScript("{" + _hcd.points_to_json(points) + "}")
     except Exception:
         pass
 
@@ -599,7 +657,10 @@ def _apply_expression_lut_from_data(node: Optional[nuke.Node]) -> bool:
     raw = ""
     if curve_data_knob is not None:
         try:
-            raw = str(curve_data_knob.value() or "")
+            raw = str(curve_data_knob.toScript() or "")
+            # Strip TCL brace quoting
+            if len(raw) >= 2 and raw[0] == "{" and raw[-1] == "}":
+                raw = raw[1:-1]
         except Exception:
             raw = ""
 
@@ -674,8 +735,8 @@ def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
     except Exception:
         connected = False
 
-    _set_blink_param_if_exists(blink, "hue_lut_width", "Hue LUT Width", width)
-    _set_blink_param_if_exists(blink, "hue_lut_connected", "Hue LUT Connected", connected)
+    _set_blink_param_if_exists(blink, "hue_lut_width", "hue_lut_width", width)
+    _set_blink_param_if_exists(blink, "hue_lut_connected", "hue_lut_connected", connected)
     _ensure_hue_curve_data(node, legacy_huecorrect)
     _apply_expression_lut_from_data(node)
 
@@ -692,12 +753,12 @@ def _sync_hue_lut_state(node: Optional[nuke.Node]) -> None:
         _set_blink_param_if_exists(
             blink,
             "hue_curves_enable",
-            "Hue Curves Enable",
+            "hue_curves_enable",
             curves_requested,
         )
 
     if not connected:
-        _set_blink_param_if_exists(blink, "hue_curves_enable", "Hue Curves Enable", False)
+        _set_blink_param_if_exists(blink, "hue_curves_enable", "hue_curves_enable", False)
         if hue_curves_knob is not None:
             try:
                 hue_curves_knob.setValue(False)
@@ -789,10 +850,25 @@ def _sync_links(node: Optional[nuke.Node], force_recompile: bool) -> int:
             except Exception:
                 pass
 
+        # Type-41 Link_Knobs (addUserKnob {41 ... T ...}) are wired at gizmo
+        # construction time.  setLink()/getLink() are expression-link APIs and
+        # fail on type-41 knobs.  We only need setLink() as a fallback if the
+        # gizmo-level link is somehow broken (the public knob can't read a
+        # value from the target).
+        already_linked = False
         try:
-            public_knob.setLink(f"BlinkScript_OKLCHGrade.{resolved_name}")
+            # If the public knob can successfully read a value, the type-41
+            # link is working — no need to call setLink().
+            public_knob.value()
+            already_linked = True
         except Exception:
-            unresolved += 1
+            pass
+
+        if not already_linked:
+            try:
+                public_knob.setLink(f"BlinkScript_OKLCHGrade.{resolved_name}")
+            except Exception:
+                unresolved += 1
 
     _debug(f"sync_links done unresolved={unresolved} force_recompile={force_recompile}", node=node)
     return unresolved
@@ -817,7 +893,9 @@ def initialize_this_node() -> None:
 
 def _initialize_this_node_impl() -> None:
     node = nuke.thisNode()
+    _check_debug_knob(node)
     _debug("initialize_impl start", node=node)
+    _diag_dump("onCreate_START", node)
     _ensure_hue_lut_format()
     _apply_colorspace_defaults(node)
     unresolved = _sync_links(node, force_recompile=False)
@@ -837,6 +915,7 @@ def _initialize_this_node_impl() -> None:
                 "</small></font>"
             ).format(unresolved),
         )
+    _diag_dump("onCreate_END", node)
     _debug(f"initialize_impl end unresolved={unresolved}", node=node)
 
 

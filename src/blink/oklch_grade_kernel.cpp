@@ -60,35 +60,35 @@ param:
   bool hue_lut_connected;
 
   void define() {
-    defineParam(l_gain, "L Gain", 1.0f);
-    defineParam(l_offset, "L Offset", 0.0f);
-    defineParam(l_contrast, "L Contrast", 1.0f);
-    defineParam(l_pivot, "L Pivot", 0.18f);
-    defineParam(c_gain, "C Gain", 1.0f);
-    defineParam(c_offset, "C Offset", 0.0f);
+    defineParam(l_gain, "l_gain", 1.0f);
+    defineParam(l_offset, "l_offset", 0.0f);
+    defineParam(l_contrast, "l_contrast", 1.0f);
+    defineParam(l_pivot, "l_pivot", 0.18f);
+    defineParam(c_gain, "c_gain", 1.0f);
+    defineParam(c_offset, "c_offset", 0.0f);
 
-    defineParam(hue_shift_deg, "Hue Shift (deg)", 0.0f);
-    defineParam(hue_chroma_threshold, "Hue Chroma Threshold", 0.05f);
+    defineParam(hue_shift_deg, "hue_shift_deg", 0.0f);
+    defineParam(hue_chroma_threshold, "hue_chroma_threshold", 0.05f);
 
-    defineParam(hue_shift_red, "Hue Shift Red", 0.0f);
-    defineParam(hue_shift_yellow, "Hue Shift Yellow", 0.0f);
-    defineParam(hue_shift_green, "Hue Shift Green", 0.0f);
-    defineParam(hue_shift_cyan, "Hue Shift Cyan", 0.0f);
-    defineParam(hue_shift_blue, "Hue Shift Blue", 0.0f);
-    defineParam(hue_shift_magenta, "Hue Shift Magenta", 0.0f);
+    defineParam(hue_shift_red, "hue_shift_red", 0.0f);
+    defineParam(hue_shift_yellow, "hue_shift_yellow", 0.0f);
+    defineParam(hue_shift_green, "hue_shift_green", 0.0f);
+    defineParam(hue_shift_cyan, "hue_shift_cyan", 0.0f);
+    defineParam(hue_shift_blue, "hue_shift_blue", 0.0f);
+    defineParam(hue_shift_magenta, "hue_shift_magenta", 0.0f);
 
-    defineParam(hue_target_deg, "Hue Target (deg)", 0.0f);
-    defineParam(hue_target_shift, "Hue Target Shift", 0.0f);
-    defineParam(hue_target_falloff_deg, "Hue Target Falloff", 25.0f);
+    defineParam(hue_target_deg, "hue_target_deg", 0.0f);
+    defineParam(hue_target_shift, "hue_target_shift", 0.0f);
+    defineParam(hue_target_falloff_deg, "hue_target_falloff_deg", 25.0f);
 
-    defineParam(mix, "Mix", 1.0f);
-    defineParam(clamp_output, "Clamp Output", false);
-    defineParam(bypass, "Bypass", false);
-    defineParam(debug_mode, "Debug Mode", 0);
+    defineParam(mix, "mix", 1.0f);
+    defineParam(clamp_output, "clamp_output", false);
+    defineParam(bypass, "bypass", false);
+    defineParam(debug_mode, "debug_mode", 0);
 
-    defineParam(hue_curves_enable, "Hue Curves Enable", false);
-    defineParam(hue_lut_width, "Hue LUT Width", 360);
-    defineParam(hue_lut_connected, "Hue LUT Connected", false);
+    defineParam(hue_curves_enable, "hue_curves_enable", false);
+    defineParam(hue_lut_width, "hue_lut_width", 360);
+    defineParam(hue_lut_connected, "hue_lut_connected", false);
   }
 
   // ---------------------------------------------------------------------------

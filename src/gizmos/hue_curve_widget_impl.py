@@ -169,7 +169,12 @@ def _widget_mode() -> str:
     return mode
 
 
+_widget_debug_knob_active = False
+
+
 def _debug_enabled() -> bool:
+    if _widget_debug_knob_active:
+        return True
     return _is_truthy(os.environ.get(_WIDGET_DEBUG_ENV, ""))
 
 
@@ -309,6 +314,14 @@ if _HAS_QT:
         ) -> None:
             super().__init__()
             self._node = node
+            # Activate widget debug if the gizmo's debug_callbacks knob is on.
+            global _widget_debug_knob_active
+            try:
+                dbg_k = node.knob("debug_callbacks") if node is not None else None
+                if dbg_k is not None and dbg_k.value():
+                    _widget_debug_knob_active = True
+            except Exception:
+                pass
             self._points = _defaults()
             self._drag_idx = None  # type: Optional[int]
             self._updating = False
@@ -365,7 +378,14 @@ if _HAS_QT:
             _debug("widget.updateValue.start", node=self._node)
             self._updating = True
             try:
-                self._points = self._load_points()
+                loaded = self._load_points()
+                _debug(
+                    f"widget.updateValue loaded {len(loaded)} points, "
+                    f"first_y={loaded[0][1] if loaded else '?'}, "
+                    f"all_neutral={all(abs(p[1] - 1.0) < 0.001 for p in loaded)}",
+                    node=self._node,
+                )
+                self._points = loaded
                 self.update()
             except Exception as exc:
                 _debug("widget.updateValue failed", node=self._node, error=exc)
@@ -694,9 +714,9 @@ if _HAS_QT:
             except Exception:
                 width = 360
 
-            self._set_blink_param_if_exists(blink, "hue_lut_width", "Hue LUT Width", width)
-            self._set_blink_param_if_exists(blink, "hue_lut_connected", "Hue LUT Connected", connected)
-            self._set_blink_param_if_exists(blink, "hue_curves_enable", "Hue Curves Enable", True)
+            self._set_blink_param_if_exists(blink, "hue_lut_width", "hue_lut_width", width)
+            self._set_blink_param_if_exists(blink, "hue_lut_connected", "hue_lut_connected", connected)
+            self._set_blink_param_if_exists(blink, "hue_curves_enable", "hue_curves_enable", True)
 
             enable_knob = self._knob("hue_curves_enable")
             if enable_knob is not None:
@@ -713,12 +733,35 @@ if _HAS_QT:
             knob = self._knob("hue_curve_data")
             if knob is not None:
                 try:
-                    raw = str(knob.value() or "")
+                    # Use toScript() to get the raw stored string.
+                    # String_Knob.value() passes through TCL evaluation which
+                    # mangles JSON (square brackets are TCL command substitution).
+                    # toScript() returns the literal content with optional TCL
+                    # quoting braces/quotes that we strip off.
+                    raw = str(knob.toScript() or "")
+                    # Strip outer TCL quoting braces or double-quotes if present
+                    if len(raw) >= 2 and raw[0] == "{" and raw[-1] == "}":
+                        raw = raw[1:-1]
+                    elif len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+                        raw = raw[1:-1]
+                    _debug(
+                        f"widget._load_points raw len={len(raw)} "
+                        f"empty={not raw.strip()} "
+                        f"repr={raw!r:.120}",
+                        node=self._node,
+                    )
                     if raw.strip():
-                        return _normalize(json.loads(raw))
+                        pts = _normalize(json.loads(raw))
+                        _debug(
+                            f"widget._load_points parsed {len(pts)} points",
+                            node=self._node,
+                        )
+                        return pts
                 except Exception as exc:
                     _debug("widget._load_points json parse failed", node=self._node, error=exc)
                     pass
+            else:
+                _debug("widget._load_points: hue_curve_data knob is None", node=self._node)
             # Legacy: migrate from HueCorrect sat curve
             if _hcd is not None and self._node is not None:
                 try:
@@ -735,9 +778,11 @@ if _HAS_QT:
 
         def _save_points(self):
             if _hcd is None:
+                _debug("widget._save_points skipped: _hcd is None", node=self._node)
                 return
             knob = self._knob("hue_curve_data")
             if knob is None:
+                _debug("widget._save_points skipped: knob is None", node=self._node)
                 return
             try:
                 try:
@@ -746,7 +791,22 @@ if _HAS_QT:
                         _okcb.set_callback_node_hint(self._node)
                 except Exception:
                     pass
-                knob.setValue(_hcd.points_to_json(self._points))
+                json_str = _hcd.points_to_json(self._points)
+                # Use fromScript() with TCL brace quoting to store JSON
+                # literally.  setValue() passes through TCL evaluation which
+                # treats square brackets as command substitution, mangling
+                # the JSON (e.g. [[0.0,1.0]] becomes a TCL error string).
+                knob.fromScript("{" + json_str + "}")
+                # Verify the write stuck (toScript includes TCL braces)
+                readback = str(knob.toScript() or "")
+                if len(readback) >= 2 and readback[0] == "{" and readback[-1] == "}":
+                    readback = readback[1:-1]
+                _debug(
+                    f"widget._save_points wrote {len(json_str)} chars, "
+                    f"{len(self._points)} points, "
+                    f"readback_len={len(readback)} match={readback == json_str}",
+                    node=self._node,
+                )
             except Exception as exc:
                 _debug("widget._save_points failed", node=self._node, error=exc)
 
