@@ -240,17 +240,53 @@ def _missing_param_knobs(blink: Optional[nuke.Node]) -> list[str]:
     return missing
 
 
-def _run_recompile(blink: Optional[nuke.Node]) -> None:
+def _snapshot_blink_params(blink: Optional[nuke.Node]) -> dict:
+    """Capture current BlinkScript param knob values before a destructive recompile."""
+    if blink is None:
+        return {}
+    snapshot: dict = {}
+    for _, label, internal_name, _ in _PARAM_LINKS:
+        resolved = _resolve_blink_knob_name(blink, label, internal_name)
+        if not resolved:
+            continue
+        k = _knob(blink, resolved)
+        if k is None:
+            continue
+        try:
+            snapshot[resolved] = k.value()
+        except Exception:
+            pass
+    return snapshot
+
+
+def _restore_blink_params(blink: Optional[nuke.Node], snapshot: dict) -> None:
+    """Restore previously captured param values after recompile."""
+    if blink is None or not snapshot:
+        return
+    for knob_name, value in snapshot.items():
+        k = _knob(blink, knob_name)
+        if k is None:
+            continue
+        try:
+            k.setValue(value)
+        except Exception:
+            pass
+
+
+def _run_recompile(blink: Optional[nuke.Node], preserve_values: bool = True) -> None:
     recompile = _knob(blink, "recompile")
     if recompile is None:
         return
+    snapshot = _snapshot_blink_params(blink) if preserve_values else {}
     try:
         recompile.execute()
         _debug("blink.recompile executed", node=blink)
     except Exception as exc:
         # Keep panel responsive even if compile fails.
         _debug("blink.recompile failed", node=blink, error=exc)
-        pass
+    if snapshot:
+        _restore_blink_params(blink, snapshot)
+        _debug(f"blink.recompile restored {len(snapshot)} param values", node=blink)
 
 
 def _set_kernel_source_inline_from_file(blink: Optional[nuke.Node]) -> bool:
@@ -461,9 +497,10 @@ def _prepare_blink_params(node: Optional[nuke.Node], force_recompile: bool) -> t
     # runtime.  Go straight to inline kernelSource (read .cpp, set knob value,
     # recompile).
     if _nuke_major_version() < 16:
-        if _set_kernel_source_inline_from_file(blink):
-            _run_recompile(blink)
         missing = _missing_param_knobs(blink)
+        if missing and _set_kernel_source_inline_from_file(blink):
+            _run_recompile(blink)
+            missing = _missing_param_knobs(blink)
         _debug(
             f"prepare_blink_params legacy_mode missing={len(missing)}",
             node=node,
@@ -484,7 +521,10 @@ def _prepare_blink_params(node: Optional[nuke.Node], force_recompile: bool) -> t
         )
 
     missing_before = _missing_param_knobs(blink)
-    needs_compile = force_recompile or bool(missing_before)
+    # Only recompile when param knobs are genuinely missing.  force_recompile
+    # is honoured only when params are absent — recompiling with all params
+    # present would destroy saved values for no benefit.
+    needs_compile = bool(missing_before)
     if needs_compile:
         if kernel_file_changed:
             _run_reload_kernel_source_file(blink)
